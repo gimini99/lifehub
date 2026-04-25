@@ -57,7 +57,7 @@ export function Controls(p: Props) {
         {p.strategy.kind === "fixedPercent" ? (
           <Slider
             label="Withdrawal rate"
-            sub={fmtPct(p.strategy.rate, 2)}
+            sub={`${fmtPct(p.strategy.rate, 2)} · ${fmtUSD(p.strategy.rate * p.total)}/yr`}
             value={Math.round(p.strategy.rate * 1000)}
             min={10} max={120} step={5}
             onChange={(v) => p.setStrategy({ kind: "fixedPercent", rate: v / 1000 })}
