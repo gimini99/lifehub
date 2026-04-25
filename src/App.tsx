@@ -9,6 +9,8 @@ import { StressTable } from "./components/StressTable";
 import { OptimizerPanel } from "./components/OptimizerPanel";
 import { TaxView } from "./components/TaxView";
 import { ExtrasPanel } from "./components/ExtrasPanel";
+import { ThemeToggle } from "./components/ThemeToggle";
+import { ThemeContext, useTheme } from "./lib/useTheme";
 import { parseFidelityCsv, computeAllocation, classWeights } from "./lib/parseCsv";
 import { runStressScenarios } from "./lib/stress";
 import type { AssetClass, ExtraAsset, Holding, SimInputs, SimResult, SimulationModel, WithdrawalStrategy } from "./types";
@@ -17,6 +19,7 @@ import { fmtUSD } from "./lib/format";
 interface PortfolioState { holdings: Holding[]; fileName: string; loadedAt: Date; }
 
 export default function App() {
+  const { theme, setTheme } = useTheme();
   const [portfolio, setPortfolio] = useState<PortfolioState | null>(null);
   const [withdrawal, setWithdrawal] = useState(80_000);
   const [horizon, setHorizon] = useState(30);
@@ -135,13 +138,14 @@ export default function App() {
   } : null;
 
   return (
+    <ThemeContext.Provider value={theme}>
     <div className="min-h-full max-w-7xl mx-auto px-4 py-6 sm:py-8">
       <header className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-ink-800 border border-ink-700 grid place-items-center">
             <svg viewBox="0 0 64 64" className="w-6 h-6">
-              <path d="M10 46 L22 30 L32 38 L44 18 L54 26" stroke="#22d3ee" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-              <circle cx="54" cy="26" r="4" fill="#22d3ee"/>
+              <path d="M10 46 L22 30 L32 38 L44 18 L54 26" stroke="rgb(var(--c-cyan-400))" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="54" cy="26" r="4" fill="rgb(var(--c-cyan-400))"/>
             </svg>
           </div>
           <div>
@@ -149,14 +153,17 @@ export default function App() {
             <p className="text-xs text-slate-400">On-device survivability analysis · nothing leaves your browser</p>
           </div>
         </div>
-        {portfolio && (
-          <button
-            className="text-xs text-slate-400 hover:text-slate-200 underline-offset-2 hover:underline"
-            onClick={() => setPortfolio(null)}
-          >
-            load different file
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <ThemeToggle theme={theme} setTheme={setTheme} />
+          {portfolio && (
+            <button
+              className="text-xs text-slate-400 hover:text-slate-200 underline-offset-2 hover:underline"
+              onClick={() => setPortfolio(null)}
+            >
+              load different file
+            </button>
+          )}
+        </div>
       </header>
 
       {!portfolio ? (
@@ -206,6 +213,7 @@ export default function App() {
         Capital-market assumptions are illustrative — edit <code className="text-slate-400">src/lib/cma.ts</code> to fit your views.
       </footer>
     </div>
+    </ThemeContext.Provider>
   );
 }
 

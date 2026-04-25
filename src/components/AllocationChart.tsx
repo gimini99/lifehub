@@ -1,10 +1,13 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import type { Allocation } from "../types";
 import { classLabel, CLASS_COLORS, fmtUSD, fmtPct } from "../lib/format";
+import { useThemeColors, useThemeFromContext } from "../lib/useTheme";
 
 interface Props { allocation: Allocation; }
 
 export function AllocationChart({ allocation }: Props) {
+  const theme = useThemeFromContext();
+  const c = useThemeColors(theme);
   const data = Object.entries(allocation.byClass)
     .filter(([, v]) => v > 0)
     .map(([k, v]) => ({ name: classLabel(k), key: k, value: v }))
@@ -23,7 +26,7 @@ export function AllocationChart({ allocation }: Props) {
               {data.map((d) => <Cell key={d.key} fill={CLASS_COLORS[d.key] ?? "#888"} />)}
             </Pie>
             <Tooltip
-              contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8 }}
+              contentStyle={{ background: c["ink-900"], border: `1px solid ${c["ink-700"]}`, borderRadius: 8, color: c["slate-100"] }}
               formatter={(v: number) => [`${fmtUSD(v)} (${fmtPct(v / allocation.total)})`, ""]}
             />
           </PieChart>

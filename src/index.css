@@ -2,8 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme tokens. Each block redefines the same set of CSS variables so any
+   `bg-ink-X` / `text-slate-X` / `text-cyan-X` Tailwind class automatically
+   tracks the active theme. RGB triplets (no rgb() wrapper) so Tailwind's
+   `<alpha-value>` substitution works for opacity utilities like `bg-cyan-500/15`. */
+
+:root[data-theme="dark"] {
+  --c-ink-950: 10 15 26;
+  --c-ink-900: 15 23 42;
+  --c-ink-800: 30 41 59;
+  --c-ink-700: 51 65 85;
+
+  --c-slate-100: 241 245 249;
+  --c-slate-200: 226 232 240;
+  --c-slate-300: 203 213 225;
+  --c-slate-400: 148 163 184;
+  --c-slate-500: 100 116 139;
+
+  --c-cyan-100: 207 250 254;
+  --c-cyan-200: 165 243 252;
+  --c-cyan-300: 103 232 249;
+  --c-cyan-400: 34 211 238;
+  --c-cyan-500: 6 182 212;
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  /* Backgrounds get lighter, text gets darker. */
+  --c-ink-950: 248 250 252;
+  --c-ink-900: 241 245 249;
+  --c-ink-800: 226 232 240;
+  --c-ink-700: 203 213 225;
+
+  --c-slate-100: 15 23 42;
+  --c-slate-200: 30 41 59;
+  --c-slate-300: 71 85 105;
+  --c-slate-400: 100 116 139;
+  --c-slate-500: 148 163 184;
+
+  --c-cyan-100: 8 145 178;
+  --c-cyan-200: 14 116 144;
+  --c-cyan-300: 21 94 117;
+  --c-cyan-400: 22 78 99;
+  --c-cyan-500: 22 78 99;
+
+  color-scheme: light;
+}
+
+:root[data-theme="sepia"] {
+  --c-ink-950: 247 237 213;
+  --c-ink-900: 238 224 188;
+  --c-ink-800: 219 200 162;
+  --c-ink-700: 191 165 122;
+
+  --c-slate-100: 49 30 12;
+  --c-slate-200: 74 47 22;
+  --c-slate-300: 102 67 32;
+  --c-slate-400: 138 100 60;
+  --c-slate-500: 168 130 88;
+
+  --c-cyan-100: 134 80 35;
+  --c-cyan-200: 158 95 40;
+  --c-cyan-300: 180 112 50;
+  --c-cyan-400: 200 130 65;
+  --c-cyan-500: 158 95 40;
+
+  color-scheme: light;
+}
+
 html, body, #root { height: 100%; }
 body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
   -webkit-font-smoothing: antialiased;
+  background: rgb(var(--c-ink-950));
+  color: rgb(var(--c-slate-100));
+}
+
+/* Form controls follow the theme. */
+select, input[type="text"], input[type="number"], input[type="range"] {
+  color-scheme: inherit;
 }
