@@ -12,6 +12,7 @@ import { ExtrasPanel } from "./components/ExtrasPanel";
 import { IncomePanel } from "./components/IncomePanel";
 import { LumpSumsPanel } from "./components/LumpSumsPanel";
 import { SequenceRiskPanel } from "./components/SequenceRiskPanel";
+import { SwrSolverPanel } from "./components/SwrSolverPanel";
 import { CashFlowTable } from "./components/CashFlowTable";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ThemeContext, useTheme } from "./lib/useTheme";
@@ -294,7 +295,8 @@ function Dashboard(p: DashboardProps) {
             <AllocationChart allocation={p.allocation} />
           </div>
           <FanChart result={p.simResult} horizon={p.horizon} />
-          <SequenceRiskPanel result={p.simResult} baseInputs={p.baseInputs} weights={p.effectiveWeights} />
+          <SwrSolverPanel baseInputs={p.baseInputs} weights={p.effectiveWeights} currentWithdrawal={p.withdrawal} />
+          <SequenceRiskPanel result={p.simResult} />
           <CashFlowTable result={p.simResult} />
           <IncomePanel streams={p.incomeStreams} setStreams={p.setIncomeStreams} horizonYears={p.horizon} />
           <LumpSumsPanel flows={p.cashFlows} setFlows={p.setCashFlows} horizonYears={p.horizon} />
