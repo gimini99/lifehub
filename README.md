@@ -63,6 +63,18 @@ npm run preview      # serve dist locally
 
 `dist/` contains a fully self-contained static site. Drop it on GitHub Pages, Cloudflare Pages, Netlify, or any static host. The PWA service worker is pre-generated.
 
+### GitHub Pages (automatic)
+
+This repo includes a workflow at `.github/workflows/deploy.yml` that builds and deploys on every push to `main`.
+
+One-time setup:
+
+1. In the repo on github.com → **Settings** → **Pages** → set **Source** to **GitHub Actions**.
+2. Push to `main` (or manually trigger the workflow under **Actions** → **Deploy to GitHub Pages** → **Run workflow**).
+3. After the run finishes, the site is live at `https://<user>.github.io/<repo>/`.
+
+The workflow runs `npm ci → npm run typecheck → npm run build`, so a broken typecheck blocks deploy.
+
 ### Install on your phone
 
 1. Deploy and open the URL in mobile Safari (iOS) or Chrome (Android).
