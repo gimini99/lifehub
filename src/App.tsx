@@ -8,9 +8,10 @@ import { FanChart } from "./components/FanChart";
 import { StressTable } from "./components/StressTable";
 import { OptimizerPanel } from "./components/OptimizerPanel";
 import { TaxView } from "./components/TaxView";
+import { ExtrasPanel } from "./components/ExtrasPanel";
 import { parseFidelityCsv, computeAllocation, classWeights } from "./lib/parseCsv";
 import { runStressScenarios } from "./lib/stress";
-import type { AssetClass, Holding, SimInputs, SimResult, SimulationModel, WithdrawalStrategy } from "./types";
+import type { AssetClass, ExtraAsset, Holding, SimInputs, SimResult, SimulationModel, WithdrawalStrategy } from "./types";
 import { fmtUSD } from "./lib/format";
 
 interface PortfolioState { holdings: Holding[]; fileName: string; loadedAt: Date; }
@@ -24,6 +25,7 @@ export default function App() {
   const [strategy, setStrategy] = useState<WithdrawalStrategy>({ kind: "fixedReal" });
   const [simulationModel, setSimulationModel] = useState<SimulationModel>("gbm");
   const [retirementTaxRate, setRetirementTaxRate] = useState(0);
+  const [extras, setExtras] = useState<ExtraAsset[]>([]);
 
   const [simResult, setSimResult] = useState<SimResult | null>(null);
   const [computing, setComputing] = useState(false);
@@ -53,7 +55,26 @@ export default function App() {
     return () => w.terminate();
   }, []);
 
-  const allocation = useMemo(() => portfolio ? computeAllocation(portfolio.holdings) : null, [portfolio]);
+  const mergedHoldings = useMemo<Holding[]>(() => {
+    if (!portfolio) return [];
+    const synthetic: Holding[] = extras.map((e) => ({
+      accountNumber: "extra",
+      accountName: e.label?.trim() ? e.label : `Hypothetical · ${e.assetClass}`,
+      symbol: null,
+      description: e.label?.trim() ? e.label : `Hypothetical ${e.assetClass}`,
+      quantity: null,
+      lastPrice: null,
+      currentValue: e.amount,
+      costBasis: null,
+      totalGainLoss: null,
+      assetClass: e.assetClass,
+      taxStatus: e.taxStatus,
+      isExtra: true,
+    }));
+    return [...portfolio.holdings, ...synthetic];
+  }, [portfolio, extras]);
+
+  const allocation = useMemo(() => portfolio ? computeAllocation(mergedHoldings) : null, [portfolio, mergedHoldings]);
   const currentWeights = useMemo(() => allocation ? classWeights(allocation) : null, [allocation]);
   const effectiveWeights = previewWeights ?? currentWeights;
 
@@ -159,7 +180,7 @@ export default function App() {
         </div>
       ) : (
         <Dashboard
-          holdings={portfolio.holdings}
+          holdings={mergedHoldings}
           allocation={allocation!}
           currentWeights={currentWeights!}
           baseInputs={baseInputs!}
@@ -177,6 +198,7 @@ export default function App() {
           stress={stress}
           previewLabel={previewLabel}
           onPreview={onPreview}
+          extras={extras} setExtras={setExtras}
         />
       )}
 
@@ -207,6 +229,8 @@ interface DashboardProps {
   stress: ReturnType<typeof runStressScenarios>;
   previewLabel: string | null;
   onPreview: (w: Record<AssetClass, number> | null, label: string | null) => void;
+  extras: ExtraAsset[];
+  setExtras: (e: ExtraAsset[]) => void;
 }
 
 function Dashboard(p: DashboardProps) {
@@ -238,6 +262,7 @@ function Dashboard(p: DashboardProps) {
             <AllocationChart allocation={p.allocation} />
           </div>
           <FanChart result={p.simResult} horizon={p.horizon} />
+          <ExtrasPanel extras={p.extras} setExtras={p.setExtras} />
           <TaxView allocation={p.allocation} retirementTaxRate={p.retirementTaxRate} />
           <OptimizerPanel
             currentWeights={p.currentWeights}

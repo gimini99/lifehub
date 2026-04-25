@@ -1,5 +1,5 @@
 import type { AssetClass } from "../types";
-import { ASSET_CLASSES } from "./cma";
+import { ASSET_CLASSES } from "../types";
 
 /**
  * Approximate annual NOMINAL total returns 1973–2023 for major asset classes.
@@ -117,3 +117,7 @@ export function sampleBootstrapYear(yearIndex: number, fallback: () => number[])
 }
 
 export const HISTORICAL_YEARS = HISTORY.map((r) => r.year);
+
+/** Raw historical rows — used by cma.ts to derive empirical mu/sigma/correlations. */
+export const HISTORICAL_ROWS = HISTORY;
+

@@ -10,6 +10,12 @@ export type AssetClass =
   | "Sector"
   | "Other";
 
+export const ASSET_CLASSES: AssetClass[] = [
+  "USStock", "IntlDeveloped", "IntlEmerging",
+  "Bond", "ShortBond", "HighYieldBond",
+  "Cash", "Gold", "Sector", "Other",
+];
+
 export type TaxStatus = "Taxable" | "TaxDeferred" | "TaxFree" | "HSA" | "Unknown";
 
 export interface Holding {
@@ -24,6 +30,16 @@ export interface Holding {
   totalGainLoss: number | null;
   assetClass: AssetClass;
   taxStatus: TaxStatus;
+  /** True for synthetic "what-if" holdings the user added via the Extras panel. */
+  isExtra?: boolean;
+}
+
+export interface ExtraAsset {
+  id: string;
+  assetClass: AssetClass;
+  taxStatus: TaxStatus;
+  amount: number;
+  label?: string;
 }
 
 export interface Allocation {
