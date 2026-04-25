@@ -3,6 +3,7 @@ Portfolio_Positions_*.csv
 *.portfolio.csv
 sample-data/
 private/
+test*.csv
 
 # Node / Vite
 node_modules/
