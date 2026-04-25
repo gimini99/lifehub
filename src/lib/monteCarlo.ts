@@ -1,4 +1,4 @@
-import type { AssetClass, IncomeStream, SimInputs, SimResult, WithdrawalStrategy } from "../types";
+import type { AssetClass, CashFlow, IncomeStream, PathYear, SimInputs, SimResult, SpendingPhases, WithdrawalStrategy } from "../types";
 import { CMA, CORR, ASSET_CLASSES } from "./cma";
 import { sampleBootstrapYear } from "./historicalReturns";
 
@@ -61,15 +61,23 @@ export function runMonteCarlo(input: SimInputs): SimResult {
   const {
     startingBalance, weights, annualWithdrawal, inflation, horizonYears,
     paths, withdrawalStrategy, simulationModel, retirementTaxRate,
-    incomeStreams,
+    incomeStreams, cashFlows, spendingPhases,
   } = input;
   const n = ASSET_CLASSES.length;
   const streams = incomeStreams ?? [];
+  const flows = cashFlows ?? [];
 
   const wArr = ASSET_CLASSES.map((c) => weights[c] ?? 0);
   const taxGrossUp = retirementTaxRate > 0 ? 1 / (1 - Math.min(retirementTaxRate, 0.95)) : 1;
 
   const balances: number[][] = Array.from({ length: paths }, () => new Array(horizonYears + 1));
+  // Per-path per-year detail kept so we can pull a representative path's columns post-hoc.
+  const detailPortRet: number[][] = Array.from({ length: paths }, () => new Array(horizonYears).fill(0));
+  const detailNetTarget: number[][] = Array.from({ length: paths }, () => new Array(horizonYears).fill(0));
+  const detailIncome: number[][] = Array.from({ length: paths }, () => new Array(horizonYears).fill(0));
+  const detailGross: number[][] = Array.from({ length: paths }, () => new Array(horizonYears).fill(0));
+  const detailFlow: number[][] = Array.from({ length: paths }, () => new Array(horizonYears).fill(0));
+
   let successes = 0;
   let totalDepletionYears = 0;
   let depletionCount = 0;
@@ -103,7 +111,13 @@ export function runMonteCarlo(input: SimInputs): SimResult {
       bal = bal * (1 + portRet);
 
       const cpi = Math.pow(1 + inflation, t - 1);
-      const { netNominal, newPrev } = nextWithdrawal(
+
+      // Apply lump-sum cash flows after returns, before withdrawal.
+      const flowNominal = cashFlowForYear(flows, t, inflation);
+      bal += flowNominal;
+
+      const phaseMult = phaseMultiplier(spendingPhases, t);
+      const { netNominal: rawNetNominal, newPrev } = nextWithdrawal(
         withdrawalStrategy,
         prevNominalNet,
         bal,
@@ -114,6 +128,9 @@ export function runMonteCarlo(input: SimInputs): SimResult {
         annualWithdrawal,
         t,
       );
+      const netNominal = rawNetNominal * phaseMult;
+      // newPrev tracks the strategy's pre-phase-multiplier baseline so phase changes don't
+      // interact with Guyton-Klinger guardrail state.
       prevNominalNet = newPrev;
 
       const incomeNominal = incomeForYear(streams, t, inflation);
@@ -125,6 +142,12 @@ export function runMonteCarlo(input: SimInputs): SimResult {
       realSpendSums[p] += netNominal / cpi;
       realSpendCounts[p] += 1;
       lastReturn = portRet;
+
+      detailPortRet[p][t - 1] = portRet;
+      detailNetTarget[p][t - 1] = netNominal;
+      detailIncome[p][t - 1] = incomeNominal;
+      detailGross[p][t - 1] = grossSpendNominal;
+      detailFlow[p][t - 1] = flowNominal;
 
       if (bal <= 0) {
         bal = 0;
@@ -146,6 +169,38 @@ export function runMonteCarlo(input: SimInputs): SimResult {
     .sort((a, b) => a - b);
   const pick = (q: number) => avgRealSpends[Math.min(avgRealSpends.length - 1, Math.floor(q * avgRealSpends.length))];
 
+  // Pick a representative path: ending balance closest to median.
+  const indexed = balances.map((row, idx) => ({ idx, end: row[horizonYears] }));
+  indexed.sort((a, b) => a.end - b.end);
+  const repIdx = indexed[Math.floor(indexed.length / 2)]?.idx ?? 0;
+  const representativePath: PathYear[] = [];
+  for (let t = 1; t <= horizonYears; t++) {
+    const portRet = detailPortRet[repIdx][t - 1];
+    const startBal = balances[repIdx][t - 1];
+    const grossPortfolio = detailGross[repIdx][t - 1];
+    const portfolioNet = taxGrossUp > 0 ? grossPortfolio / taxGrossUp : grossPortfolio;
+    representativePath.push({
+      year: t,
+      startBal,
+      returnPct: portRet,
+      returnDollars: startBal * portRet,
+      income: detailIncome[repIdx][t - 1],
+      netSpendTarget: detailNetTarget[repIdx][t - 1],
+      portfolioGross: grossPortfolio,
+      taxes: grossPortfolio - portfolioNet,
+      cashFlow: detailFlow[repIdx][t - 1],
+      endBal: balances[repIdx][t],
+    });
+  }
+
+  // Sample worst-case trajectories for sequence-of-returns viz: take the bottom ~5% by ending balance.
+  const worstCount = Math.min(20, Math.max(5, Math.floor(paths * 0.05)));
+  const worstPaths: number[][] = [];
+  for (let i = 0; i < worstCount; i++) {
+    const pIdx = indexed[i]?.idx;
+    if (pIdx != null) worstPaths.push(balances[pIdx].slice());
+  }
+
   return {
     successProbability: successes / paths,
     percentiles: pcts,
@@ -156,6 +211,8 @@ export function runMonteCarlo(input: SimInputs): SimResult {
       p10AvgRealSpend: pick(0.10),
       p90AvgRealSpend: pick(0.90),
     },
+    worstPaths,
+    representativePath,
   };
 }
 
@@ -208,6 +265,25 @@ function nextWithdrawal(
   }
 }
 
+/** Sum of all lump-sum cash events landing in simulation year `t` (1-indexed). */
+function cashFlowForYear(flows: CashFlow[], t: number, inflation: number): number {
+  if (flows.length === 0) return 0;
+  let total = 0;
+  for (const f of flows) {
+    if (f.year !== t) continue;
+    total += f.inflationAdjusted ? f.amount * Math.pow(1 + inflation, t - 1) : f.amount;
+  }
+  return total;
+}
+
+/** Phase multiplier for year `t` (1-indexed). Returns 1.0 if phases not configured. */
+function phaseMultiplier(phases: SpendingPhases | undefined, t: number): number {
+  if (!phases) return 1.0;
+  if (t >= phases.phase3Year) return phases.phase3Mult;
+  if (t >= phases.phase2Year) return phases.phase2Mult;
+  return 1.0;
+}
+
 /** Sum of all active streams' nominal payouts for simulation year `t` (1-indexed). */
 function incomeForYear(streams: IncomeStream[], t: number, inflation: number): number {
   if (streams.length === 0) return 0;
@@ -251,3 +327,47 @@ export const DEFAULT_GK: Extract<WithdrawalStrategy, { kind: "guytonKlinger" }> 
   prosperityTrigger: 0.20,
   skipCpiAfterNegative: true,
 };
+
+/**
+ * Binary-search the largest annualWithdrawal (or fixedPercent rate) that achieves
+ * `targetSuccess` survivability. Returns the dollar amount that funds year-1 spending.
+ *
+ * For `fixedReal` and `guytonKlinger` strategies we solve for the dollar amount.
+ * For `fixedPercent` we solve for the rate and return the implied dollar amount.
+ */
+export function findMaxSafeWithdrawal(
+  base: Omit<SimInputs, "weights" | "annualWithdrawal" | "withdrawalStrategy" | "paths"> & {
+    weights: Record<AssetClass, number>;
+    withdrawalStrategy: WithdrawalStrategy;
+  },
+  targetSuccess = 0.95,
+  iterations = 12,
+  paths = 2000,
+): { amount: number; rate: number; success: number } {
+  const balance = base.startingBalance;
+  if (base.withdrawalStrategy.kind === "fixedPercent") {
+    let lo = 0.005, hi = 0.15, success = 0;
+    for (let i = 0; i < iterations; i++) {
+      const mid = (lo + hi) / 2;
+      const r = runMonteCarlo({
+        ...base, paths,
+        annualWithdrawal: balance * mid,
+        withdrawalStrategy: { kind: "fixedPercent", rate: mid },
+      });
+      success = r.successProbability;
+      if (success >= targetSuccess) lo = mid; else hi = mid;
+    }
+    return { amount: balance * lo, rate: lo, success };
+  }
+  let lo = 0, hi = balance * 0.15, success = 0;
+  for (let i = 0; i < iterations; i++) {
+    const mid = (lo + hi) / 2;
+    const r = runMonteCarlo({
+      ...base, paths,
+      annualWithdrawal: mid,
+    });
+    success = r.successProbability;
+    if (success >= targetSuccess) lo = mid; else hi = mid;
+  }
+  return { amount: lo, rate: balance > 0 ? lo / balance : 0, success };
+}

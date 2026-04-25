@@ -10,11 +10,14 @@ import { OptimizerPanel } from "./components/OptimizerPanel";
 import { TaxView } from "./components/TaxView";
 import { ExtrasPanel } from "./components/ExtrasPanel";
 import { IncomePanel } from "./components/IncomePanel";
+import { LumpSumsPanel } from "./components/LumpSumsPanel";
+import { SequenceRiskPanel } from "./components/SequenceRiskPanel";
+import { CashFlowTable } from "./components/CashFlowTable";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ThemeContext, useTheme } from "./lib/useTheme";
 import { parseFidelityCsv, computeAllocation, classWeights } from "./lib/parseCsv";
 import { runStressScenarios } from "./lib/stress";
-import type { AssetClass, ExtraAsset, Holding, IncomeStream, SimInputs, SimResult, SimulationModel, WithdrawalStrategy } from "./types";
+import type { AssetClass, CashFlow, ExtraAsset, Holding, IncomeStream, SimInputs, SimResult, SimulationModel, SpendingPhases, WithdrawalStrategy } from "./types";
 import { fmtUSD } from "./lib/format";
 
 interface PortfolioState { holdings: Holding[]; fileName: string; loadedAt: Date; }
@@ -31,6 +34,8 @@ export default function App() {
   const [retirementTaxRate, setRetirementTaxRate] = useState(0);
   const [extras, setExtras] = useState<ExtraAsset[]>([]);
   const [incomeStreams, setIncomeStreams] = useState<IncomeStream[]>([]);
+  const [cashFlows, setCashFlows] = useState<CashFlow[]>([]);
+  const [spendingPhases, setSpendingPhases] = useState<SpendingPhases | undefined>(undefined);
 
   const [simResult, setSimResult] = useState<SimResult | null>(null);
   const [computing, setComputing] = useState(false);
@@ -107,9 +112,11 @@ export default function App() {
       simulationModel,
       retirementTaxRate,
       incomeStreams,
+      cashFlows,
+      spendingPhases,
     };
     workerRef.current.postMessage({ id: reqIdRef.current, input });
-  }, [allocation, effectiveWeights, previewWeights, withdrawal, inflation, horizon, paths, strategy, simulationModel, retirementTaxRate, incomeStreams]);
+  }, [allocation, effectiveWeights, previewWeights, withdrawal, inflation, horizon, paths, strategy, simulationModel, retirementTaxRate, incomeStreams, cashFlows, spendingPhases]);
 
   const handleFile = (text: string, fileName: string) => {
     try {
@@ -139,6 +146,8 @@ export default function App() {
     simulationModel,
     retirementTaxRate,
     incomeStreams,
+    cashFlows,
+    spendingPhases,
   } : null;
 
   return (
@@ -211,6 +220,9 @@ export default function App() {
           onPreview={onPreview}
           extras={extras} setExtras={setExtras}
           incomeStreams={incomeStreams} setIncomeStreams={setIncomeStreams}
+          cashFlows={cashFlows} setCashFlows={setCashFlows}
+          spendingPhases={spendingPhases} setSpendingPhases={setSpendingPhases}
+          effectiveWeights={effectiveWeights}
         />
       )}
 
@@ -246,6 +258,11 @@ interface DashboardProps {
   setExtras: (e: ExtraAsset[]) => void;
   incomeStreams: IncomeStream[];
   setIncomeStreams: (s: IncomeStream[]) => void;
+  cashFlows: CashFlow[];
+  setCashFlows: (f: CashFlow[]) => void;
+  spendingPhases: SpendingPhases | undefined;
+  setSpendingPhases: (s: SpendingPhases | undefined) => void;
+  effectiveWeights: Record<AssetClass, number> | null;
 }
 
 function Dashboard(p: DashboardProps) {
@@ -277,7 +294,10 @@ function Dashboard(p: DashboardProps) {
             <AllocationChart allocation={p.allocation} />
           </div>
           <FanChart result={p.simResult} horizon={p.horizon} />
+          <SequenceRiskPanel result={p.simResult} baseInputs={p.baseInputs} weights={p.effectiveWeights} />
+          <CashFlowTable result={p.simResult} />
           <IncomePanel streams={p.incomeStreams} setStreams={p.setIncomeStreams} horizonYears={p.horizon} />
+          <LumpSumsPanel flows={p.cashFlows} setFlows={p.setCashFlows} horizonYears={p.horizon} />
           <ExtrasPanel extras={p.extras} setExtras={p.setExtras} />
           <TaxView allocation={p.allocation} retirementTaxRate={p.retirementTaxRate} />
           <OptimizerPanel
@@ -299,6 +319,7 @@ function Dashboard(p: DashboardProps) {
           strategy={p.strategy} setStrategy={p.setStrategy}
           simulationModel={p.simulationModel} setSimulationModel={p.setSimulationModel}
           retirementTaxRate={p.retirementTaxRate} setRetirementTaxRate={p.setRetirementTaxRate}
+          spendingPhases={p.spendingPhases} setSpendingPhases={p.setSpendingPhases}
         />
       </div>
     </div>

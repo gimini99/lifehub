@@ -1,4 +1,4 @@
-import type { SimulationModel, WithdrawalStrategy } from "../types";
+import type { SimulationModel, SpendingPhases, WithdrawalStrategy } from "../types";
 import { fmtPct, fmtUSD } from "../lib/format";
 
 interface Props {
@@ -18,7 +18,11 @@ interface Props {
   setSimulationModel: (m: SimulationModel) => void;
   retirementTaxRate: number;
   setRetirementTaxRate: (n: number) => void;
+  spendingPhases: SpendingPhases | undefined;
+  setSpendingPhases: (s: SpendingPhases | undefined) => void;
 }
+
+const DEFAULT_PHASES: SpendingPhases = { phase2Year: 16, phase2Mult: 0.75, phase3Year: 26, phase3Mult: 0.90 };
 
 export function Controls(p: Props) {
   const wRate = p.total > 0 ? p.withdrawal / p.total : 0;
@@ -88,6 +92,49 @@ export function Controls(p: Props) {
           onChange={(v) => p.setRetirementTaxRate(v / 100)}
         />
         <p className="mt-1 text-xs text-slate-500">Sim grosses up your withdrawal to fund the after-tax spending you set above.</p>
+      </Section>
+
+      <Section title="Spending phases">
+        <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!p.spendingPhases}
+            onChange={(e) => p.setSpendingPhases(e.target.checked ? DEFAULT_PHASES : undefined)}
+            className="accent-cyan-400"
+          />
+          Use go-go / slow-go / no-go phases
+        </label>
+        {p.spendingPhases && (
+          <div className="space-y-2 pl-1 mt-1">
+            <Slider
+              label="Slow-go starts year"
+              sub={`year ${p.spendingPhases.phase2Year}`}
+              value={p.spendingPhases.phase2Year} min={2} max={p.horizon} step={1}
+              onChange={(v) => p.setSpendingPhases({ ...p.spendingPhases!, phase2Year: Math.min(v, p.spendingPhases!.phase3Year - 1) })}
+            />
+            <Slider
+              label="Slow-go spending"
+              sub={fmtPct(p.spendingPhases.phase2Mult, 0)}
+              value={Math.round(p.spendingPhases.phase2Mult * 100)} min={40} max={120} step={5}
+              onChange={(v) => p.setSpendingPhases({ ...p.spendingPhases!, phase2Mult: v / 100 })}
+            />
+            <Slider
+              label="No-go starts year"
+              sub={`year ${p.spendingPhases.phase3Year}`}
+              value={p.spendingPhases.phase3Year} min={p.spendingPhases.phase2Year + 1} max={p.horizon} step={1}
+              onChange={(v) => p.setSpendingPhases({ ...p.spendingPhases!, phase3Year: v })}
+            />
+            <Slider
+              label="No-go spending"
+              sub={fmtPct(p.spendingPhases.phase3Mult, 0)}
+              value={Math.round(p.spendingPhases.phase3Mult * 100)} min={40} max={150} step={5}
+              onChange={(v) => p.setSpendingPhases({ ...p.spendingPhases!, phase3Mult: v / 100 })}
+            />
+            <p className="text-xs text-slate-500">
+              Default: full spending years 1-15, 75% slow-go years 16-25, 90% no-go years 26+ (healthcare bump).
+            </p>
+          </div>
+        )}
       </Section>
 
       <Section title="Simulation engine">

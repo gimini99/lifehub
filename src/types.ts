@@ -62,6 +62,36 @@ export interface IncomeStream {
   inflationAdjusted: boolean;
 }
 
+/**
+ * A one-time cash event hitting the portfolio in a specific simulation year.
+ * Positive amounts (inheritance, home sale) add to balance. Negative amounts
+ * (home renovation, large medical, lump-sum tax) subtract. Applied AFTER returns
+ * but BEFORE the year's withdrawal so the balance can fund spending.
+ */
+export interface CashFlow {
+  id: string;
+  label: string;
+  year: number;       // 1-indexed sim year
+  amount: number;     // signed nominal dollars; if inflationAdjusted, treated as year-1 real
+  inflationAdjusted: boolean;
+}
+
+/**
+ * Variable real spending across retirement phases:
+ *   - Go-Go: years 1 .. (phase2Year - 1) at 100%
+ *   - Slow-Go: years phase2Year .. (phase3Year - 1) at phase2Mult
+ *   - No-Go: years phase3Year onward at phase3Mult
+ *
+ * The strategy's nominal target is multiplied by the matching phase multiplier
+ * before income offset and tax gross-up.
+ */
+export interface SpendingPhases {
+  phase2Year: number;
+  phase2Mult: number;
+  phase3Year: number;
+  phase3Mult: number;
+}
+
 export interface Allocation {
   byClass: Record<AssetClass, number>;
   byAccount: Record<string, number>;
@@ -94,6 +124,8 @@ export interface SimInputs {
   simulationModel: SimulationModel;
   retirementTaxRate: number;    // 0..1 — sim grosses up withdrawal to fund net spending
   incomeStreams?: IncomeStream[];
+  cashFlows?: CashFlow[];
+  spendingPhases?: SpendingPhases;
 }
 
 export interface SimResult {
@@ -113,6 +145,23 @@ export interface SimResult {
     p10AvgRealSpend: number;
     p90AvgRealSpend: number;
   };
+  /** Sample of low-quintile balance trajectories — for sequence-of-returns visualization. */
+  worstPaths?: number[][];
+  /** Year-by-year detail for the path whose ending balance is closest to the median. */
+  representativePath?: PathYear[];
+}
+
+export interface PathYear {
+  year: number;
+  startBal: number;
+  returnPct: number;
+  returnDollars: number;
+  income: number;
+  netSpendTarget: number;
+  portfolioGross: number;  // dollars actually pulled from portfolio (after tax gross-up)
+  taxes: number;           // grossUp - net = the tax portion
+  cashFlow: number;        // signed lump-sum events for the year
+  endBal: number;
 }
 
 export interface StressResult {
