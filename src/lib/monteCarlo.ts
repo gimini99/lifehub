@@ -1,4 +1,4 @@
-import type { AssetClass, SimInputs, SimResult, WithdrawalStrategy } from "../types";
+import type { AssetClass, IncomeStream, SimInputs, SimResult, WithdrawalStrategy } from "../types";
 import { CMA, CORR, ASSET_CLASSES } from "./cma";
 import { sampleBootstrapYear } from "./historicalReturns";
 
@@ -61,8 +61,10 @@ export function runMonteCarlo(input: SimInputs): SimResult {
   const {
     startingBalance, weights, annualWithdrawal, inflation, horizonYears,
     paths, withdrawalStrategy, simulationModel, retirementTaxRate,
+    incomeStreams,
   } = input;
   const n = ASSET_CLASSES.length;
+  const streams = incomeStreams ?? [];
 
   const wArr = ASSET_CLASSES.map((c) => weights[c] ?? 0);
   const taxGrossUp = retirementTaxRate > 0 ? 1 / (1 - Math.min(retirementTaxRate, 0.95)) : 1;
@@ -114,7 +116,10 @@ export function runMonteCarlo(input: SimInputs): SimResult {
       );
       prevNominalNet = newPrev;
 
-      const grossSpendNominal = netNominal * taxGrossUp;
+      const incomeNominal = incomeForYear(streams, t, inflation);
+      // Income covers part of net spending need; only the residual gets pulled (and grossed up) from the portfolio.
+      const portfolioNetNeeded = Math.max(0, netNominal - incomeNominal);
+      const grossSpendNominal = portfolioNetNeeded * taxGrossUp;
       bal -= grossSpendNominal;
 
       realSpendSums[p] += netNominal / cpi;
@@ -201,6 +206,22 @@ function nextWithdrawal(
       return { netNominal: candidate, newPrev: candidate };
     }
   }
+}
+
+/** Sum of all active streams' nominal payouts for simulation year `t` (1-indexed). */
+function incomeForYear(streams: IncomeStream[], t: number, inflation: number): number {
+  if (streams.length === 0) return 0;
+  let total = 0;
+  for (const s of streams) {
+    if (t < s.startYear) continue;
+    if (s.endYear != null && t > s.endYear) continue;
+    if (s.inflationAdjusted) {
+      total += s.annualAmount * Math.pow(1 + inflation, t - 1);
+    } else {
+      total += s.annualAmount;
+    }
+  }
+  return total;
 }
 
 function computePercentiles(balances: number[][], horizon: number): SimResult["percentiles"] {

@@ -9,11 +9,12 @@ import { StressTable } from "./components/StressTable";
 import { OptimizerPanel } from "./components/OptimizerPanel";
 import { TaxView } from "./components/TaxView";
 import { ExtrasPanel } from "./components/ExtrasPanel";
+import { IncomePanel } from "./components/IncomePanel";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ThemeContext, useTheme } from "./lib/useTheme";
 import { parseFidelityCsv, computeAllocation, classWeights } from "./lib/parseCsv";
 import { runStressScenarios } from "./lib/stress";
-import type { AssetClass, ExtraAsset, Holding, SimInputs, SimResult, SimulationModel, WithdrawalStrategy } from "./types";
+import type { AssetClass, ExtraAsset, Holding, IncomeStream, SimInputs, SimResult, SimulationModel, WithdrawalStrategy } from "./types";
 import { fmtUSD } from "./lib/format";
 
 interface PortfolioState { holdings: Holding[]; fileName: string; loadedAt: Date; }
@@ -29,6 +30,7 @@ export default function App() {
   const [simulationModel, setSimulationModel] = useState<SimulationModel>("gbm");
   const [retirementTaxRate, setRetirementTaxRate] = useState(0);
   const [extras, setExtras] = useState<ExtraAsset[]>([]);
+  const [incomeStreams, setIncomeStreams] = useState<IncomeStream[]>([]);
 
   const [simResult, setSimResult] = useState<SimResult | null>(null);
   const [computing, setComputing] = useState(false);
@@ -104,9 +106,10 @@ export default function App() {
       withdrawalStrategy: strategy,
       simulationModel,
       retirementTaxRate,
+      incomeStreams,
     };
     workerRef.current.postMessage({ id: reqIdRef.current, input });
-  }, [allocation, effectiveWeights, previewWeights, withdrawal, inflation, horizon, paths, strategy, simulationModel, retirementTaxRate]);
+  }, [allocation, effectiveWeights, previewWeights, withdrawal, inflation, horizon, paths, strategy, simulationModel, retirementTaxRate, incomeStreams]);
 
   const handleFile = (text: string, fileName: string) => {
     try {
@@ -135,6 +138,7 @@ export default function App() {
     withdrawalStrategy: strategy,
     simulationModel,
     retirementTaxRate,
+    incomeStreams,
   } : null;
 
   return (
@@ -206,6 +210,7 @@ export default function App() {
           previewLabel={previewLabel}
           onPreview={onPreview}
           extras={extras} setExtras={setExtras}
+          incomeStreams={incomeStreams} setIncomeStreams={setIncomeStreams}
         />
       )}
 
@@ -239,6 +244,8 @@ interface DashboardProps {
   onPreview: (w: Record<AssetClass, number> | null, label: string | null) => void;
   extras: ExtraAsset[];
   setExtras: (e: ExtraAsset[]) => void;
+  incomeStreams: IncomeStream[];
+  setIncomeStreams: (s: IncomeStream[]) => void;
 }
 
 function Dashboard(p: DashboardProps) {
@@ -270,6 +277,7 @@ function Dashboard(p: DashboardProps) {
             <AllocationChart allocation={p.allocation} />
           </div>
           <FanChart result={p.simResult} horizon={p.horizon} />
+          <IncomePanel streams={p.incomeStreams} setStreams={p.setIncomeStreams} horizonYears={p.horizon} />
           <ExtrasPanel extras={p.extras} setExtras={p.setExtras} />
           <TaxView allocation={p.allocation} retirementTaxRate={p.retirementTaxRate} />
           <OptimizerPanel

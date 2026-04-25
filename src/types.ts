@@ -42,6 +42,26 @@ export interface ExtraAsset {
   label?: string;
 }
 
+/**
+ * A recurring after-tax income stream (Social Security, pension, rental income, etc.).
+ * Income offsets the portfolio's spending need before gross-up:
+ *   portfolio_draw = max(0, target_net_spend - income_for_year) * tax_grossup
+ *
+ * `annualAmount` is in year-1 dollars. If `inflationAdjusted` is true, the amount is
+ * scaled by (1 + inflation)^(t-1) each subsequent year.
+ *
+ * `startYear` is 1-indexed: 1 = first year of the simulation. `endYear` is inclusive;
+ * leave undefined for a lifelong stream.
+ */
+export interface IncomeStream {
+  id: string;
+  label: string;
+  annualAmount: number;
+  startYear: number;
+  endYear?: number;
+  inflationAdjusted: boolean;
+}
+
 export interface Allocation {
   byClass: Record<AssetClass, number>;
   byAccount: Record<string, number>;
@@ -73,6 +93,7 @@ export interface SimInputs {
   withdrawalStrategy: WithdrawalStrategy;
   simulationModel: SimulationModel;
   retirementTaxRate: number;    // 0..1 — sim grosses up withdrawal to fund net spending
+  incomeStreams?: IncomeStream[];
 }
 
 export interface SimResult {
