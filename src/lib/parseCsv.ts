@@ -1,12 +1,15 @@
 import Papa from "papaparse";
-import type { Holding, Allocation, AssetClass } from "../types";
+import type { Holding, Allocation, AssetClass, TaxStatus } from "../types";
 import { classify } from "./classify";
+import { classifyAccount } from "./accountType";
 
 const ASSET_CLASSES: AssetClass[] = [
   "USStock", "IntlDeveloped", "IntlEmerging",
   "Bond", "ShortBond", "HighYieldBond",
   "Cash", "Gold", "Sector", "Other",
 ];
+
+const TAX_STATUSES: TaxStatus[] = ["Taxable", "TaxDeferred", "TaxFree", "HSA", "Unknown"];
 
 function parseMoney(s: string | undefined | null): number | null {
   if (s == null) return null;
@@ -70,6 +73,7 @@ export function parseFidelityCsv(text: string): Holding[] {
       costBasis: parseMoney(row["Cost Basis Total"]),
       totalGainLoss: parseMoney(row["Total Gain/Loss Dollar"]),
       assetClass: classify(symbol, description),
+      taxStatus: classifyAccount(accountName),
     });
   }
   return holdings;
@@ -77,14 +81,16 @@ export function parseFidelityCsv(text: string): Holding[] {
 
 export function computeAllocation(holdings: Holding[]): Allocation {
   const byClass = Object.fromEntries(ASSET_CLASSES.map((c) => [c, 0])) as Record<AssetClass, number>;
+  const byTaxStatus = Object.fromEntries(TAX_STATUSES.map((t) => [t, 0])) as Record<TaxStatus, number>;
   const byAccount: Record<string, number> = {};
   let total = 0;
   for (const h of holdings) {
     byClass[h.assetClass] += h.currentValue;
+    byTaxStatus[h.taxStatus] += h.currentValue;
     byAccount[h.accountName] = (byAccount[h.accountName] ?? 0) + h.currentValue;
     total += h.currentValue;
   }
-  return { byClass, byAccount, total };
+  return { byClass, byAccount, byTaxStatus, total };
 }
 
 export function classWeights(allocation: Allocation): Record<AssetClass, number> {

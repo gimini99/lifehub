@@ -1,13 +1,14 @@
-import type { SimResult } from "../types";
+import type { SimResult, WithdrawalStrategy } from "../types";
 import { fmtPct, fmtUSD } from "../lib/format";
 
 interface Props {
   result: SimResult | null;
   computing: boolean;
   horizon: number;
+  strategy: WithdrawalStrategy;
 }
 
-export function SurvivabilityCard({ result, computing, horizon }: Props) {
+export function SurvivabilityCard({ result, computing, horizon, strategy }: Props) {
   const pct = result?.successProbability ?? 0;
   const tone =
     pct >= 0.9 ? "text-emerald-400" :
@@ -15,13 +16,15 @@ export function SurvivabilityCard({ result, computing, horizon }: Props) {
     pct >= 0.5 ? "text-amber-300" :
     "text-rose-400";
 
+  const isVariableSpend = strategy.kind !== "fixedReal";
+
   return (
     <div className="rounded-xl bg-ink-900/60 border border-ink-800 p-4">
       <div className="flex items-center justify-between mb-1">
         <h3 className="font-medium">Survivability</h3>
         {computing && <span className="text-xs text-slate-400 animate-pulse">simulating…</span>}
       </div>
-      <div className="text-sm text-slate-400 mb-2">probability portfolio survives full {horizon}-yr horizon</div>
+      <div className="text-sm text-slate-400 mb-2">probability portfolio lasts the full {horizon}-yr horizon</div>
       <div className={`text-5xl font-semibold tabular-nums ${tone}`}>
         {result ? fmtPct(pct, 1) : "—"}
       </div>
@@ -32,6 +35,25 @@ export function SurvivabilityCard({ result, computing, horizon }: Props) {
           value={result?.yearsToDepletion ? `${result.yearsToDepletion.toFixed(1)} yrs` : "—"}
         />
       </div>
+      {isVariableSpend && result?.spendStats && (
+        <div className="mt-3 rounded-lg bg-ink-800/40 border border-ink-800 p-3 text-sm">
+          <div className="text-xs text-slate-400 mb-1">Realized average real spending (year-0 dollars)</div>
+          <div className="grid grid-cols-3 gap-2 text-xs tabular-nums">
+            <div>
+              <div className="text-slate-500">10th pct</div>
+              <div className="text-rose-300">{fmtUSD(result.spendStats.p10AvgRealSpend, { compact: true })}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Median</div>
+              <div className="text-cyan-200">{fmtUSD(result.spendStats.medianAvgRealSpend, { compact: true })}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">90th pct</div>
+              <div className="text-emerald-300">{fmtUSD(result.spendStats.p90AvgRealSpend, { compact: true })}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

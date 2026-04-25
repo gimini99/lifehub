@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import type { Holding } from "../types";
 import { classLabel, fmtUSD, fmtPct, CLASS_COLORS } from "../lib/format";
+import { TAX_STATUS_COLORS, taxStatusLabel } from "../lib/accountType";
 
 interface Props { holdings: Holding[]; total: number; }
 
@@ -39,6 +40,7 @@ export function HoldingsTable({ holdings, total }: Props) {
               <th className="py-1 pr-2">Symbol</th>
               <th className="py-1 pr-2">Description</th>
               <th className="py-1 pr-2">Class</th>
+              <th className="py-1 pr-2">Tax</th>
               <th className="py-1 pr-2 text-right">Value</th>
               <th className="py-1 pr-2 text-right">%</th>
             </tr>
@@ -50,7 +52,22 @@ export function HoldingsTable({ holdings, total }: Props) {
                 <Fragment key={g.account}>
                   {groupByAccount && (
                     <tr className="border-t border-ink-800 text-slate-300">
-                      <td colSpan={3} className="py-2 font-medium">{g.account}</td>
+                      <td colSpan={4} className="py-2 font-medium">
+                        <span className="inline-flex items-center gap-2">
+                          {g.rows[0] && (
+                            <span
+                              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border"
+                              style={{
+                                color: TAX_STATUS_COLORS[g.rows[0].taxStatus],
+                                borderColor: TAX_STATUS_COLORS[g.rows[0].taxStatus] + "55",
+                              }}
+                            >
+                              {taxStatusLabel(g.rows[0].taxStatus)}
+                            </span>
+                          )}
+                          {g.account}
+                        </span>
+                      </td>
                       <td className="py-2 text-right tabular-nums">{fmtUSD(subtotal)}</td>
                       <td className="py-2 text-right tabular-nums">{fmtPct(subtotal / total)}</td>
                     </tr>
@@ -65,6 +82,7 @@ export function HoldingsTable({ holdings, total }: Props) {
                           <span className="text-slate-300">{classLabel(r.assetClass)}</span>
                         </span>
                       </td>
+                      <td className="py-1 pr-2 text-xs" style={{ color: TAX_STATUS_COLORS[r.taxStatus] }}>{taxStatusLabel(r.taxStatus)}</td>
                       <td className="py-1 pr-2 text-right tabular-nums">{fmtUSD(r.currentValue)}</td>
                       <td className="py-1 pr-2 text-right tabular-nums text-slate-400">{fmtPct(r.currentValue / total)}</td>
                     </tr>

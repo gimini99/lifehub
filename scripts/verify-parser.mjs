@@ -68,11 +68,25 @@ for (const row of parsed.data) {
   });
 }
 
+function classifyAccount(name) {
+  const n = (name ?? "").toUpperCase();
+  if (!n) return "Unknown";
+  if (/HSA|HEALTH SAVINGS/.test(n)) return "HSA";
+  if (/401\s*\(?K\)?|401K|403\s*\(?B\)?|403B|TRADITIONAL\s+IRA|ROLLOVER\s+IRA|SEP[\s-]?IRA|SIMPLE\s+IRA|PROFIT\s+SHARING/.test(n)) return "TaxDeferred";
+  if (/ROTH/.test(n)) return "TaxFree";
+  if (/BROKERAGE|INDIVIDUAL|JOINT|TRUST|CHECKING|FIDELITY GO|YOUTH|UTMA|UGMA|529|LONG[\s-]?TERM|SHORT[\s-]?TERM|BONDS\s+INVESTMENTS/.test(n)) return "Taxable";
+  return "Taxable";
+}
+
+for (const h of holdings) h.taxStatus = classifyAccount(h.account);
+
 const total = holdings.reduce((s, h) => s + h.value, 0);
 const byClass = {};
 for (const h of holdings) byClass[h.klass] = (byClass[h.klass] ?? 0) + h.value;
 const byAccount = {};
 for (const h of holdings) byAccount[h.account] = (byAccount[h.account] ?? 0) + h.value;
+const byTax = {};
+for (const h of holdings) byTax[h.taxStatus] = (byTax[h.taxStatus] ?? 0) + h.value;
 
 const fmt = (n) => "$" + Math.round(n).toLocaleString();
 console.log(`\n${holdings.length} positions, total ${fmt(total)}\n`);
@@ -83,6 +97,10 @@ for (const [k, v] of Object.entries(byClass).sort((a, b) => b[1] - a[1])) {
 console.log("\n--- by account ---");
 for (const [k, v] of Object.entries(byAccount).sort((a, b) => b[1] - a[1])) {
   console.log(`  ${k.padEnd(40)} ${fmt(v).padStart(14)}  ${(v / total * 100).toFixed(1).padStart(5)}%`);
+}
+console.log("\n--- by tax status ---");
+for (const [k, v] of Object.entries(byTax).sort((a, b) => b[1] - a[1])) {
+  console.log(`  ${k.padEnd(16)} ${fmt(v).padStart(14)}  ${(v / total * 100).toFixed(1).padStart(5)}%`);
 }
 console.log("\n--- per-holding classification ---");
 for (const h of holdings.sort((a, b) => b.value - a.value)) {

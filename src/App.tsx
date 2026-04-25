@@ -7,9 +7,10 @@ import { SurvivabilityCard } from "./components/SurvivabilityCard";
 import { FanChart } from "./components/FanChart";
 import { StressTable } from "./components/StressTable";
 import { OptimizerPanel } from "./components/OptimizerPanel";
+import { TaxView } from "./components/TaxView";
 import { parseFidelityCsv, computeAllocation, classWeights } from "./lib/parseCsv";
 import { runStressScenarios } from "./lib/stress";
-import type { AssetClass, Holding, SimInputs, SimResult } from "./types";
+import type { AssetClass, Holding, SimInputs, SimResult, SimulationModel, WithdrawalStrategy } from "./types";
 import { fmtUSD } from "./lib/format";
 
 interface PortfolioState { holdings: Holding[]; fileName: string; loadedAt: Date; }
@@ -20,6 +21,9 @@ export default function App() {
   const [horizon, setHorizon] = useState(30);
   const [inflation, setInflation] = useState(0.025);
   const [paths, setPaths] = useState(4000);
+  const [strategy, setStrategy] = useState<WithdrawalStrategy>({ kind: "fixedReal" });
+  const [simulationModel, setSimulationModel] = useState<SimulationModel>("gbm");
+  const [retirementTaxRate, setRetirementTaxRate] = useState(0);
 
   const [simResult, setSimResult] = useState<SimResult | null>(null);
   const [computing, setComputing] = useState(false);
@@ -73,9 +77,12 @@ export default function App() {
       inflation,
       horizonYears: horizon,
       paths,
+      withdrawalStrategy: strategy,
+      simulationModel,
+      retirementTaxRate,
     };
     workerRef.current.postMessage({ id: reqIdRef.current, input });
-  }, [allocation, effectiveWeights, previewWeights, withdrawal, inflation, horizon, paths]);
+  }, [allocation, effectiveWeights, previewWeights, withdrawal, inflation, horizon, paths, strategy, simulationModel, retirementTaxRate]);
 
   const handleFile = (text: string, fileName: string) => {
     try {
@@ -101,6 +108,9 @@ export default function App() {
     inflation,
     horizonYears: horizon,
     paths: 4000,
+    withdrawalStrategy: strategy,
+    simulationModel,
+    retirementTaxRate,
   } : null;
 
   return (
@@ -160,6 +170,9 @@ export default function App() {
           horizon={horizon} setHorizon={setHorizon}
           inflation={inflation} setInflation={setInflation}
           paths={paths} setPaths={setPaths}
+          strategy={strategy} setStrategy={setStrategy}
+          simulationModel={simulationModel} setSimulationModel={setSimulationModel}
+          retirementTaxRate={retirementTaxRate} setRetirementTaxRate={setRetirementTaxRate}
           simResult={simResult} computing={computing}
           stress={stress}
           previewLabel={previewLabel}
@@ -186,6 +199,9 @@ interface DashboardProps {
   horizon: number; setHorizon: (n: number) => void;
   inflation: number; setInflation: (n: number) => void;
   paths: number; setPaths: (n: number) => void;
+  strategy: WithdrawalStrategy; setStrategy: (s: WithdrawalStrategy) => void;
+  simulationModel: SimulationModel; setSimulationModel: (m: SimulationModel) => void;
+  retirementTaxRate: number; setRetirementTaxRate: (n: number) => void;
   simResult: SimResult | null;
   computing: boolean;
   stress: ReturnType<typeof runStressScenarios>;
@@ -218,10 +234,11 @@ function Dashboard(p: DashboardProps) {
       <div className="grid lg:grid-cols-[1fr_22rem] gap-4">
         <div className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
-            <SurvivabilityCard result={p.simResult} computing={p.computing} horizon={p.horizon} />
+            <SurvivabilityCard result={p.simResult} computing={p.computing} horizon={p.horizon} strategy={p.strategy} />
             <AllocationChart allocation={p.allocation} />
           </div>
           <FanChart result={p.simResult} horizon={p.horizon} />
+          <TaxView allocation={p.allocation} retirementTaxRate={p.retirementTaxRate} />
           <OptimizerPanel
             currentWeights={p.currentWeights}
             baseInputs={p.baseInputs}
@@ -238,6 +255,9 @@ function Dashboard(p: DashboardProps) {
           inflation={p.inflation} setInflation={p.setInflation}
           paths={p.paths} setPaths={p.setPaths}
           total={p.allocation.total}
+          strategy={p.strategy} setStrategy={p.setStrategy}
+          simulationModel={p.simulationModel} setSimulationModel={p.setSimulationModel}
+          retirementTaxRate={p.retirementTaxRate} setRetirementTaxRate={p.setRetirementTaxRate}
         />
       </div>
     </div>
