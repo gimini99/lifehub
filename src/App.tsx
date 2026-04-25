@@ -6,9 +6,10 @@ import { Controls } from "./components/Controls";
 import { SurvivabilityCard } from "./components/SurvivabilityCard";
 import { FanChart } from "./components/FanChart";
 import { StressTable } from "./components/StressTable";
+import { OptimizerPanel } from "./components/OptimizerPanel";
 import { parseFidelityCsv, computeAllocation, classWeights } from "./lib/parseCsv";
 import { runStressScenarios } from "./lib/stress";
-import type { Holding, SimInputs, SimResult } from "./types";
+import type { AssetClass, Holding, SimInputs, SimResult } from "./types";
 import { fmtUSD } from "./lib/format";
 
 interface PortfolioState { holdings: Holding[]; fileName: string; loadedAt: Date; }
@@ -19,10 +20,19 @@ export default function App() {
   const [horizon, setHorizon] = useState(30);
   const [inflation, setInflation] = useState(0.025);
   const [paths, setPaths] = useState(4000);
+
   const [simResult, setSimResult] = useState<SimResult | null>(null);
   const [computing, setComputing] = useState(false);
+  const [baselineSuccess, setBaselineSuccess] = useState<number | null>(null);
+
+  // Preview state — when set, the sim and forward-looking views use these weights instead of current.
+  const [previewWeights, setPreviewWeights] = useState<Record<AssetClass, number> | null>(null);
+  const [previewLabel, setPreviewLabel] = useState<string | null>(null);
+
   const workerRef = useRef<Worker | null>(null);
   const reqIdRef = useRef(0);
+  // Track whether each in-flight sim is for the current portfolio (so we know to update the baseline number).
+  const reqIsBaselineRef = useRef(true);
 
   useEffect(() => {
     const w = new Worker(new URL("./workers/sim.worker.ts", import.meta.url), { type: "module" });
@@ -30,33 +40,42 @@ export default function App() {
     w.onmessage = (e: MessageEvent<{ id: number; result?: SimResult; error?: string }>) => {
       if (e.data.id !== reqIdRef.current) return;
       if (e.data.error) console.error(e.data.error);
-      if (e.data.result) setSimResult(e.data.result);
+      if (e.data.result) {
+        setSimResult(e.data.result);
+        if (reqIsBaselineRef.current) setBaselineSuccess(e.data.result.successProbability);
+      }
       setComputing(false);
     };
     return () => w.terminate();
   }, []);
 
   const allocation = useMemo(() => portfolio ? computeAllocation(portfolio.holdings) : null, [portfolio]);
-  const weights = useMemo(() => allocation ? classWeights(allocation) : null, [allocation]);
+  const currentWeights = useMemo(() => allocation ? classWeights(allocation) : null, [allocation]);
+  const effectiveWeights = previewWeights ?? currentWeights;
+
   const stress = useMemo(
-    () => allocation && weights ? runStressScenarios(allocation.total, weights) : [],
-    [allocation, weights]
+    () => allocation && effectiveWeights ? runStressScenarios(allocation.total, effectiveWeights) : [],
+    [allocation, effectiveWeights]
   );
 
+  // Reset preview when portfolio changes.
+  useEffect(() => { setPreviewWeights(null); setPreviewLabel(null); setBaselineSuccess(null); }, [portfolio]);
+
   useEffect(() => {
-    if (!allocation || !weights || !workerRef.current) return;
+    if (!allocation || !effectiveWeights || !workerRef.current) return;
     setComputing(true);
     reqIdRef.current += 1;
+    reqIsBaselineRef.current = previewWeights == null;
     const input: SimInputs = {
       startingBalance: allocation.total,
-      weights,
+      weights: effectiveWeights,
       annualWithdrawal: withdrawal,
       inflation,
       horizonYears: horizon,
       paths,
     };
     workerRef.current.postMessage({ id: reqIdRef.current, input });
-  }, [allocation, weights, withdrawal, inflation, horizon, paths]);
+  }, [allocation, effectiveWeights, previewWeights, withdrawal, inflation, horizon, paths]);
 
   const handleFile = (text: string, fileName: string) => {
     try {
@@ -70,6 +89,19 @@ export default function App() {
       alert(`Failed to parse: ${e}`);
     }
   };
+
+  const onPreview = (w: Record<AssetClass, number> | null, label: string | null) => {
+    setPreviewWeights(w);
+    setPreviewLabel(label);
+  };
+
+  const baseInputs: Omit<SimInputs, "weights"> | null = allocation ? {
+    startingBalance: allocation.total,
+    annualWithdrawal: withdrawal,
+    inflation,
+    horizonYears: horizon,
+    paths: 4000,
+  } : null;
 
   return (
     <div className="min-h-full max-w-7xl mx-auto px-4 py-6 sm:py-8">
@@ -119,6 +151,9 @@ export default function App() {
         <Dashboard
           holdings={portfolio.holdings}
           allocation={allocation!}
+          currentWeights={currentWeights!}
+          baseInputs={baseInputs!}
+          baselineSuccess={baselineSuccess}
           fileName={portfolio.fileName}
           loadedAt={portfolio.loadedAt}
           withdrawal={withdrawal} setWithdrawal={setWithdrawal}
@@ -127,6 +162,8 @@ export default function App() {
           paths={paths} setPaths={setPaths}
           simResult={simResult} computing={computing}
           stress={stress}
+          previewLabel={previewLabel}
+          onPreview={onPreview}
         />
       )}
 
@@ -140,6 +177,9 @@ export default function App() {
 interface DashboardProps {
   holdings: Holding[];
   allocation: ReturnType<typeof computeAllocation>;
+  currentWeights: Record<AssetClass, number>;
+  baseInputs: Omit<SimInputs, "weights">;
+  baselineSuccess: number | null;
   fileName: string;
   loadedAt: Date;
   withdrawal: number; setWithdrawal: (n: number) => void;
@@ -149,6 +189,8 @@ interface DashboardProps {
   simResult: SimResult | null;
   computing: boolean;
   stress: ReturnType<typeof runStressScenarios>;
+  previewLabel: string | null;
+  onPreview: (w: Record<AssetClass, number> | null, label: string | null) => void;
 }
 
 function Dashboard(p: DashboardProps) {
@@ -159,6 +201,20 @@ function Dashboard(p: DashboardProps) {
         <span>{p.loadedAt.toLocaleString()}</span>
       </div>
 
+      {p.previewLabel && (
+        <div className="rounded-xl bg-cyan-500/10 border border-cyan-400/30 px-4 py-2 text-sm flex items-center justify-between flex-wrap gap-2">
+          <span className="text-cyan-100">
+            Previewing <span className="font-medium">{p.previewLabel}</span> — survivability/fan chart/stress reflect this alternative; allocation pie + holdings still show your current portfolio.
+          </span>
+          <button
+            onClick={() => p.onPreview(null, null)}
+            className="px-2 py-1 rounded-md bg-cyan-500/20 border border-cyan-400/30 text-cyan-100 text-xs hover:bg-cyan-500/30"
+          >
+            Revert to current
+          </button>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-[1fr_22rem] gap-4">
         <div className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
@@ -166,6 +222,13 @@ function Dashboard(p: DashboardProps) {
             <AllocationChart allocation={p.allocation} />
           </div>
           <FanChart result={p.simResult} horizon={p.horizon} />
+          <OptimizerPanel
+            currentWeights={p.currentWeights}
+            baseInputs={p.baseInputs}
+            baselineSuccess={p.baselineSuccess}
+            onPreview={p.onPreview}
+            previewing={p.previewLabel}
+          />
           <StressTable results={p.stress} startingBalance={p.allocation.total} />
           <HoldingsTable holdings={p.holdings} total={p.allocation.total} />
         </div>
