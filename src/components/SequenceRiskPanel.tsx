@@ -43,7 +43,7 @@ export function SequenceRiskPanel({ result, scheduledStress }: Props) {
 
       <div className="h-64 mb-2">
         <ResponsiveContainer>
-          <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+          <LineChart data={data} margin={{ top: events.length > 0 ? 26 : 8, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid stroke={c["ink-800"]} strokeDasharray="3 3" />
             <XAxis dataKey="year" stroke={c["slate-500"]} tick={{ fontSize: 11, fill: c["slate-400"] }} />
             <YAxis stroke={c["slate-500"]} tick={{ fontSize: 11, fill: c["slate-400"] }} tickFormatter={(v) => fmtUSD(v, { compact: true })} />
@@ -71,10 +71,10 @@ export function SequenceRiskPanel({ result, scheduledStress }: Props) {
               <ReferenceLine
                 key={ev.id}
                 x={ev.year}
-                stroke="#fb7185"
+                stroke="#e11d48"
                 strokeWidth={1.5}
                 strokeDasharray="4 3"
-                label={{ value: ev.scenarioName, position: "top", fill: "#fb7185", fontSize: 10 }}
+                label={{ value: ev.scenarioName, position: "top", fill: "#e11d48", fontSize: 11, fontWeight: 600 }}
               />
             ))}
           </LineChart>
