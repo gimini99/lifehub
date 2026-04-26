@@ -85,6 +85,17 @@ const SCENARIOS: Scenario[] = [
     },
     recoveryYearsBaseline: 0, // positive return scenario; "recovery" doesn't apply
   },
+  {
+    name: "Soft Landing + AI Boom",
+    description: "2-3yr cumulative Goldilocks scenario: Fed tames inflation without recession, AI-driven productivity gains compress timelines and expand margins. US equities surge (semis, AI infra, software dominate); intl participates but lags. Bonds rally on rate cuts. Gold modestly higher on continued central-bank demand. The 2023-2024 actual market is a partial historical reference.",
+    shock: {
+      USStock: 0.50, IntlDeveloped: 0.20, IntlEmerging: 0.25,
+      Sector: 0.75, HighYieldBond: 0.20,
+      Bond: 0.12, ShortBond: 0.08, Cash: 0.08,
+      Gold: 0.10, Other: 0.25,
+    },
+    recoveryYearsBaseline: 0,
+  },
 ];
 
 export function runStressScenarios(
