@@ -21,7 +21,12 @@ import { runStressScenarios } from "./lib/stress";
 import type { AssetClass, CashFlow, ExtraAsset, Holding, IncomeStream, SimInputs, SimResult, SimulationModel, SpendingPhases, WithdrawalStrategy } from "./types";
 import { fmtUSD } from "./lib/format";
 
-interface PortfolioState { holdings: Holding[]; fileName: string; loadedAt: Date; }
+interface PortfolioState {
+  holdings: Holding[];
+  fileName: string;
+  loadedAt: Date;
+  source: "csv" | "manual";
+}
 
 export default function App() {
   const { theme, setTheme } = useTheme();
@@ -99,6 +104,9 @@ export default function App() {
 
   useEffect(() => {
     if (!allocation || !effectiveWeights || !workerRef.current) return;
+    // No money to simulate yet — manual mode before any asset is entered. Skip the worker call so
+    // we don't burn cycles on a starting-balance-of-zero sim that always shows 0% survivability.
+    if (allocation.total <= 0) { setSimResult(null); setComputing(false); return; }
     setComputing(true);
     reqIdRef.current += 1;
     reqIsBaselineRef.current = previewWeights == null;
@@ -126,10 +134,17 @@ export default function App() {
         alert("No holdings found in this file. Is it a Fidelity portfolio export?");
         return;
       }
-      setPortfolio({ holdings, fileName, loadedAt: new Date() });
+      setPortfolio({ holdings, fileName, loadedAt: new Date(), source: "csv" });
     } catch (e) {
       alert(`Failed to parse: ${e}`);
     }
+  };
+
+  const startManual = () => {
+    // Empty real portfolio. The user's holdings will live in `extras`, which already merges into
+    // mergedHoldings. The downstream report pipeline doesn't care which source they came from.
+    setPortfolio({ holdings: [], fileName: "Manual portfolio", loadedAt: new Date(), source: "manual" });
+    setExtras([]);
   };
 
   const onPreview = (w: Record<AssetClass, number> | null, label: string | null) => {
@@ -172,32 +187,51 @@ export default function App() {
           {portfolio && (
             <button
               className="text-xs text-slate-400 hover:text-slate-200 underline-offset-2 hover:underline"
-              onClick={() => setPortfolio(null)}
+              onClick={() => { setPortfolio(null); setExtras([]); }}
             >
-              load different file
+              start over
             </button>
           )}
         </div>
       </header>
 
       {!portfolio ? (
-        <div className="grid sm:grid-cols-[1fr_minmax(0,28rem)_1fr] gap-4">
-          <div />
-          <div className="space-y-4">
+        <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+          <div className="rounded-xl bg-ink-900/40 border border-ink-800 p-5 space-y-3 flex flex-col">
+            <div>
+              <div className="font-medium">Upload Fidelity CSV</div>
+              <p className="text-sm text-slate-400">Get an instant baseline from your real portfolio.</p>
+            </div>
             <FileDrop onFile={handleFile} />
-            <div className="rounded-xl bg-ink-900/40 border border-ink-800 p-4 text-sm text-slate-300">
-              <div className="font-medium mb-1">How to get the file</div>
-              <ol className="list-decimal pl-5 space-y-1 text-slate-400">
-                <li>Sign in to fidelity.com → Accounts → Portfolio</li>
-                <li>Click the “Download” button (top right of positions table)</li>
-                <li>Choose CSV. Drop it here.</li>
-              </ol>
-              <div className="mt-3 text-xs text-slate-500">
-                The file is parsed locally — it never leaves your device.
-              </div>
+            <ol className="list-decimal pl-5 space-y-1 text-xs text-slate-400">
+              <li>Sign in to fidelity.com → Accounts → Portfolio</li>
+              <li>Click the &ldquo;Download&rdquo; button (top right of positions table)</li>
+              <li>Choose CSV. Drop it here.</li>
+            </ol>
+            <div className="text-xs text-slate-500">
+              The file is parsed locally — it never leaves your device.
             </div>
           </div>
-          <div />
+
+          <div className="rounded-xl bg-ink-900/40 border border-ink-800 p-5 space-y-3 flex flex-col">
+            <div>
+              <div className="font-medium">Build manually</div>
+              <p className="text-sm text-slate-400">No CSV needed — type in your holdings by asset class and amount, and the same report runs.</p>
+            </div>
+            <ul className="text-xs text-slate-400 space-y-1 pl-1">
+              <li>· Pick an asset class (US Stocks, Bonds, Gold, etc.)</li>
+              <li>· Enter a dollar amount</li>
+              <li>· Mark Taxable or Not taxable</li>
+              <li>· Add as many rows as you want — same survivability, optimizer, stress, and cash-flow output</li>
+            </ul>
+            <div className="flex-1" />
+            <button
+              onClick={startManual}
+              className="w-full px-3 py-2 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-200 text-sm hover:bg-cyan-500/25"
+            >
+              Start manual entry →
+            </button>
+          </div>
         </div>
       ) : (
         <Dashboard
@@ -224,6 +258,7 @@ export default function App() {
           cashFlows={cashFlows} setCashFlows={setCashFlows}
           spendingPhases={spendingPhases} setSpendingPhases={setSpendingPhases}
           effectiveWeights={effectiveWeights}
+          source={portfolio.source}
         />
       )}
 
@@ -264,17 +299,45 @@ interface DashboardProps {
   spendingPhases: SpendingPhases | undefined;
   setSpendingPhases: (s: SpendingPhases | undefined) => void;
   effectiveWeights: Record<AssetClass, number> | null;
+  source: "csv" | "manual";
 }
 
 function Dashboard(p: DashboardProps) {
+  const isManual = p.source === "manual";
+  const hasMoney = p.allocation.total > 0;
+
+  // The same ExtrasPanel handles both flows — only its position and copy change.
+  const entryPanel = (
+    <ExtrasPanel
+      extras={p.extras}
+      setExtras={p.setExtras}
+      title={isManual ? "Your portfolio" : "Hypothetical / Extra Assets"}
+      description={isManual
+        ? "Add your assets one at a time. Pick a class, enter a dollar amount, mark Taxable or Not taxable, and click Add. Everything below recomputes."
+        : undefined}
+    />
+  );
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl bg-ink-900/40 border border-ink-800 px-4 py-2 text-xs text-slate-400 flex items-center justify-between flex-wrap gap-2">
-        <span>Loaded <span className="text-slate-200">{p.fileName}</span> · {p.holdings.length} positions · {fmtUSD(p.allocation.total)}</span>
+        <span>
+          {isManual ? "Manual entry" : "Loaded"} <span className="text-slate-200">{p.fileName}</span>
+          {" · "}{p.holdings.length} {p.holdings.length === 1 ? "position" : "positions"}
+          {" · "}{fmtUSD(p.allocation.total)}
+        </span>
         <span>{p.loadedAt.toLocaleString()}</span>
       </div>
 
-      {p.previewLabel && (
+      {isManual && entryPanel}
+
+      {isManual && !hasMoney && (
+        <div className="rounded-xl bg-ink-900/40 border border-ink-800 px-4 py-6 text-center text-sm text-slate-400">
+          Add at least one asset above to generate the report.
+        </div>
+      )}
+
+      {hasMoney && p.previewLabel && (
         <div className="rounded-xl bg-cyan-500/10 border border-cyan-400/30 px-4 py-2 text-sm flex items-center justify-between flex-wrap gap-2">
           <span className="text-cyan-100">
             Previewing <span className="font-medium">{p.previewLabel}</span> — survivability/fan chart/stress reflect this alternative; allocation pie + holdings still show your current portfolio.
@@ -288,6 +351,7 @@ function Dashboard(p: DashboardProps) {
         </div>
       )}
 
+      {hasMoney && (
       <div className="grid lg:grid-cols-[1fr_22rem] gap-4">
         <div className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
@@ -300,7 +364,7 @@ function Dashboard(p: DashboardProps) {
           <CashFlowTable result={p.simResult} />
           <IncomePanel streams={p.incomeStreams} setStreams={p.setIncomeStreams} horizonYears={p.horizon} />
           <LumpSumsPanel flows={p.cashFlows} setFlows={p.setCashFlows} horizonYears={p.horizon} />
-          <ExtrasPanel extras={p.extras} setExtras={p.setExtras} />
+          {!isManual && entryPanel}
           <TaxView allocation={p.allocation} retirementTaxRate={p.retirementTaxRate} />
           <OptimizerPanel
             currentWeights={p.currentWeights}
@@ -324,6 +388,7 @@ function Dashboard(p: DashboardProps) {
           spendingPhases={p.spendingPhases} setSpendingPhases={p.setSpendingPhases}
         />
       </div>
+      )}
     </div>
   );
 }

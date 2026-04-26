@@ -4,16 +4,18 @@ import { ASSET_CLASSES } from "../types";
 import { classLabel, fmtUSD, CLASS_COLORS } from "../lib/format";
 import { taxStatusLabel, TAX_STATUS_COLORS } from "../lib/accountType";
 
-const TAX_OPTIONS: TaxStatus[] = ["Taxable", "TaxDeferred", "TaxFree", "HSA"];
-
 interface Props {
   extras: ExtraAsset[];
   setExtras: (e: ExtraAsset[]) => void;
+  /** Override the panel title — useful when this serves as the primary entry form in manual mode. */
+  title?: string;
+  /** Override the helper text below the title. */
+  description?: string;
 }
 
-export function ExtrasPanel({ extras, setExtras }: Props) {
+export function ExtrasPanel({ extras, setExtras, title, description }: Props) {
   const [klass, setKlass] = useState<AssetClass>("USStock");
-  const [tax, setTax] = useState<TaxStatus>("Taxable");
+  const [taxable, setTaxable] = useState<boolean>(true);
   const [amount, setAmount] = useState<string>("");
   const [label, setLabel] = useState<string>("");
 
@@ -23,7 +25,8 @@ export function ExtrasPanel({ extras, setExtras }: Props) {
     const n = parseFloat(amount.replace(/[$,]/g, ""));
     if (!isFinite(n) || n <= 0) return;
     const id = Math.random().toString(36).slice(2, 10);
-    setExtras([...extras, { id, assetClass: klass, taxStatus: tax, amount: n, label: label.trim() || undefined }]);
+    const taxStatus: TaxStatus = taxable ? "Taxable" : "TaxFree";
+    setExtras([...extras, { id, assetClass: klass, taxStatus, amount: n, label: label.trim() || undefined }]);
     setAmount("");
     setLabel("");
   };
@@ -32,9 +35,9 @@ export function ExtrasPanel({ extras, setExtras }: Props) {
     <div className="rounded-xl bg-ink-900/60 border border-ink-800 p-4">
       <div className="flex items-baseline justify-between mb-2">
         <div>
-          <h3 className="font-medium">Hypothetical / Extra Assets</h3>
+          <h3 className="font-medium">{title ?? "Hypothetical / Extra Assets"}</h3>
           <p className="text-xs text-slate-400">
-            Add what-if money that's not in your CSV (e.g., expected inheritance, real-estate equity, planned 401k contribution).
+            {description ?? "Add what-if money that's not in your CSV (e.g., expected inheritance, real-estate equity, planned 401k contribution)."}
           </p>
         </div>
         {total > 0 && <span className="text-sm text-slate-300 tabular-nums">+{fmtUSD(total)}</span>}
@@ -68,20 +71,14 @@ export function ExtrasPanel({ extras, setExtras }: Props) {
         </ul>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_8rem_minmax(0,1fr)_auto] gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_8rem_auto_minmax(0,1fr)_auto] gap-2 items-center">
         <select
           value={klass}
           onChange={(e) => setKlass(e.target.value as AssetClass)}
           className="bg-ink-800/60 border border-ink-700 rounded-md px-2 py-1.5 text-sm"
+          aria-label="Asset class"
         >
           {ASSET_CLASSES.map((c) => <option key={c} value={c}>{classLabel(c)}</option>)}
-        </select>
-        <select
-          value={tax}
-          onChange={(e) => setTax(e.target.value as TaxStatus)}
-          className="bg-ink-800/60 border border-ink-700 rounded-md px-2 py-1.5 text-sm"
-        >
-          {TAX_OPTIONS.map((t) => <option key={t} value={t}>{taxStatusLabel(t)}</option>)}
         </select>
         <input
           type="text"
@@ -92,6 +89,29 @@ export function ExtrasPanel({ extras, setExtras }: Props) {
           onKeyDown={(e) => e.key === "Enter" && add()}
           className="bg-ink-800/60 border border-ink-700 rounded-md px-2 py-1.5 text-sm tabular-nums"
         />
+        <fieldset className="flex items-center gap-3 text-sm text-slate-300 px-1">
+          <legend className="sr-only">Tax status</legend>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="radio"
+              name="extras-tax"
+              checked={taxable}
+              onChange={() => setTaxable(true)}
+              className="accent-cyan-400"
+            />
+            Taxable
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="radio"
+              name="extras-tax"
+              checked={!taxable}
+              onChange={() => setTaxable(false)}
+              className="accent-cyan-400"
+            />
+            Not taxable
+          </label>
+        </fieldset>
         <input
           type="text"
           placeholder="Label (optional)"
