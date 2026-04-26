@@ -1,4 +1,4 @@
-import type { AssetClass, CashFlow, IncomeStream, PathYear, SimInputs, SimResult, SpendingPhases, WithdrawalStrategy } from "../types";
+import type { AssetClass, CashFlow, IncomeStream, PathYear, ScheduledStress, SimInputs, SimResult, SpendingPhases, WithdrawalStrategy } from "../types";
 import { CMA, CORR, ASSET_CLASSES } from "./cma";
 import { sampleBootstrapYear } from "./historicalReturns";
 
@@ -61,11 +61,19 @@ export function runMonteCarlo(input: SimInputs): SimResult {
   const {
     startingBalance, weights, annualWithdrawal, inflation, horizonYears,
     paths, withdrawalStrategy, simulationModel, retirementTaxRate,
-    incomeStreams, cashFlows, spendingPhases,
+    incomeStreams, cashFlows, spendingPhases, scheduledStress,
   } = input;
   const n = ASSET_CLASSES.length;
   const streams = incomeStreams ?? [];
   const flows = cashFlows ?? [];
+  const stressEvents = scheduledStress ?? [];
+
+  // Pre-bucket stress events by year for O(1) lookup inside the inner loop.
+  const stressByYear = new Map<number, ScheduledStress[]>();
+  for (const ev of stressEvents) {
+    if (!stressByYear.has(ev.year)) stressByYear.set(ev.year, []);
+    stressByYear.get(ev.year)!.push(ev);
+  }
 
   const wArr = ASSET_CLASSES.map((c) => weights[c] ?? 0);
   const taxGrossUp = retirementTaxRate > 0 ? 1 / (1 - Math.min(retirementTaxRate, 0.95)) : 1;
@@ -102,6 +110,19 @@ export function runMonteCarlo(input: SimInputs): SimResult {
         simulationModel === "bootstrap"
           ? sampleBootstrapYear(bootstrapStart + t - 1, () => gbmYearReturn())
           : gbmYearReturn();
+
+      // Compound any scheduled stress shocks into this year's per-class returns.
+      const eventsThisYear = stressByYear.get(t);
+      if (eventsThisYear && eventsThisYear.length > 0) {
+        for (let i = 0; i < n; i++) {
+          let r = yearReturns[i];
+          for (const ev of eventsThisYear) {
+            const s = ev.shock[ASSET_CLASSES[i]];
+            if (s != null) r = (1 + r) * (1 + s) - 1;
+          }
+          yearReturns[i] = r;
+        }
+      }
 
       let portRet = 0;
       for (let i = 0; i < n; i++) {

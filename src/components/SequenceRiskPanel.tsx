@@ -1,15 +1,17 @@
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { SimResult } from "../types";
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { ScheduledStress, SimResult } from "../types";
 import { fmtUSD } from "../lib/format";
 import { useThemeColors, useThemeFromContext } from "../lib/useTheme";
 
 interface Props {
   result: SimResult | null;
+  scheduledStress?: ScheduledStress[];
 }
 
-export function SequenceRiskPanel({ result }: Props) {
+export function SequenceRiskPanel({ result, scheduledStress }: Props) {
   const theme = useThemeFromContext();
   const c = useThemeColors(theme);
+  const events = scheduledStress ?? [];
 
   if (!result) {
     return (
@@ -65,6 +67,16 @@ export function SequenceRiskPanel({ result }: Props) {
               />
             ))}
             <Line type="monotone" dataKey="median" stroke={c["cyan-400"]} strokeWidth={2.5} dot={false} name="Median" />
+            {events.map((ev) => (
+              <ReferenceLine
+                key={ev.id}
+                x={ev.year}
+                stroke="#fb7185"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                label={{ value: ev.scenarioName, position: "top", fill: "#fb7185", fontSize: 10 }}
+              />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </div>

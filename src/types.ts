@@ -77,6 +77,21 @@ export interface CashFlow {
 }
 
 /**
+ * A stress scenario (preset or custom) scheduled to fire at a specific simulation year.
+ * The shock is compounded INTO that year's per-class return inside the Monte Carlo loop:
+ *   adjusted_return_i = (1 + market_return_i) * (1 + shock_i) - 1
+ *
+ * Snapshot semantics: the `shock` map is captured at creation time, so editing the
+ * underlying preset later doesn't retroactively change scheduled events.
+ */
+export interface ScheduledStress {
+  id: string;
+  scenarioName: string;
+  year: number;
+  shock: Partial<Record<AssetClass, number>>;
+}
+
+/**
  * Variable real spending across retirement phases:
  *   - Go-Go: years 1 .. (phase2Year - 1) at 100%
  *   - Slow-Go: years phase2Year .. (phase3Year - 1) at phase2Mult
@@ -126,6 +141,7 @@ export interface SimInputs {
   incomeStreams?: IncomeStream[];
   cashFlows?: CashFlow[];
   spendingPhases?: SpendingPhases;
+  scheduledStress?: ScheduledStress[];
 }
 
 export interface SimResult {

@@ -1,9 +1,13 @@
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Line } from "recharts";
-import type { SimResult } from "../types";
+import { Area, AreaChart, ResponsiveContainer, ReferenceLine, Tooltip, XAxis, YAxis, CartesianGrid, Line } from "recharts";
+import type { ScheduledStress, SimResult } from "../types";
 import { fmtUSD } from "../lib/format";
 import { useThemeColors, useThemeFromContext } from "../lib/useTheme";
 
-interface Props { result: SimResult | null; horizon: number; }
+interface Props {
+  result: SimResult | null;
+  horizon: number;
+  scheduledStress?: ScheduledStress[];
+}
 
 interface Datum {
   year: number;
@@ -12,9 +16,10 @@ interface Datum {
   band25_75: [number, number];
 }
 
-export function FanChart({ result, horizon }: Props) {
+export function FanChart({ result, horizon, scheduledStress }: Props) {
   const theme = useThemeFromContext();
   const c = useThemeColors(theme);
+  const events = scheduledStress ?? [];
 
   if (!result) {
     return (
@@ -66,6 +71,16 @@ export function FanChart({ result, horizon }: Props) {
             <Area type="monotone" dataKey="band5_95" stroke="none" fill={c["cyan-400"]} fillOpacity={0.10} name="5–95%" />
             <Area type="monotone" dataKey="band25_75" stroke="none" fill={c["cyan-400"]} fillOpacity={0.22} name="25–75%" />
             <Line type="monotone" dataKey="p50" stroke={c["cyan-400"]} strokeWidth={2} dot={false} name="Median" />
+            {events.map((ev) => (
+              <ReferenceLine
+                key={ev.id}
+                x={ev.year}
+                stroke="#fb7185"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                label={{ value: ev.scenarioName, position: "top", fill: "#fb7185", fontSize: 10 }}
+              />
+            ))}
           </AreaChart>
         </ResponsiveContainer>
       </div>

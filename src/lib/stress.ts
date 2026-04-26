@@ -1,13 +1,13 @@
 import type { AssetClass, StressResult } from "../types";
 
-interface Scenario {
+export interface Scenario {
   name: string;
   description: string;
   shock: Partial<Record<AssetClass, number>>; // one-shot return per class (e.g., -0.50 = -50%)
   recoveryYearsBaseline: number;
 }
 
-const SCENARIOS: Scenario[] = [
+export const SCENARIOS: Scenario[] = [
   {
     name: "2008 Global Financial Crisis",
     description: "Equities -50%, real estate / sectors crushed, bonds rally, gold flat-to-up. Roughly Oct-2007 → Mar-2009.",

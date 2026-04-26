@@ -11,6 +11,7 @@ import { TaxView } from "./components/TaxView";
 import { ExtrasPanel } from "./components/ExtrasPanel";
 import { IncomePanel } from "./components/IncomePanel";
 import { LumpSumsPanel } from "./components/LumpSumsPanel";
+import { ScheduledStressPanel } from "./components/ScheduledStressPanel";
 import { SequenceRiskPanel } from "./components/SequenceRiskPanel";
 import { SwrSolverPanel } from "./components/SwrSolverPanel";
 import { CashFlowTable } from "./components/CashFlowTable";
@@ -18,7 +19,7 @@ import { ThemeToggle } from "./components/ThemeToggle";
 import { ThemeContext, useTheme } from "./lib/useTheme";
 import { parseFidelityCsv, computeAllocation, classWeights } from "./lib/parseCsv";
 import { runStressScenarios } from "./lib/stress";
-import type { AssetClass, CashFlow, ExtraAsset, Holding, IncomeStream, SimInputs, SimResult, SimulationModel, SpendingPhases, WithdrawalStrategy } from "./types";
+import type { AssetClass, CashFlow, ExtraAsset, Holding, IncomeStream, ScheduledStress, SimInputs, SimResult, SimulationModel, SpendingPhases, WithdrawalStrategy } from "./types";
 import { fmtUSD } from "./lib/format";
 
 interface PortfolioState {
@@ -35,13 +36,14 @@ export default function App() {
   const [horizon, setHorizon] = useState(30);
   const [inflation, setInflation] = useState(0.025);
   const [paths, setPaths] = useState(4000);
-  const [strategy, setStrategy] = useState<WithdrawalStrategy>({ kind: "fixedReal" });
+  const [strategy, setStrategy] = useState<WithdrawalStrategy>({ kind: "fixedPercent", rate: 0.04 });
   const [simulationModel, setSimulationModel] = useState<SimulationModel>("gbm");
   const [retirementTaxRate, setRetirementTaxRate] = useState(0);
   const [extras, setExtras] = useState<ExtraAsset[]>([]);
   const [incomeStreams, setIncomeStreams] = useState<IncomeStream[]>([]);
   const [cashFlows, setCashFlows] = useState<CashFlow[]>([]);
   const [spendingPhases, setSpendingPhases] = useState<SpendingPhases | undefined>(undefined);
+  const [scheduledStress, setScheduledStress] = useState<ScheduledStress[]>([]);
 
   const [simResult, setSimResult] = useState<SimResult | null>(null);
   const [computing, setComputing] = useState(false);
@@ -123,9 +125,10 @@ export default function App() {
       incomeStreams,
       cashFlows,
       spendingPhases,
+      scheduledStress,
     };
     workerRef.current.postMessage({ id: reqIdRef.current, input });
-  }, [allocation, effectiveWeights, previewWeights, withdrawal, inflation, horizon, paths, strategy, simulationModel, retirementTaxRate, incomeStreams, cashFlows, spendingPhases]);
+  }, [allocation, effectiveWeights, previewWeights, withdrawal, inflation, horizon, paths, strategy, simulationModel, retirementTaxRate, incomeStreams, cashFlows, spendingPhases, scheduledStress]);
 
   const handleFile = (text: string, fileName: string) => {
     try {
@@ -164,6 +167,7 @@ export default function App() {
     incomeStreams,
     cashFlows,
     spendingPhases,
+    scheduledStress,
   } : null;
 
   return (
@@ -257,6 +261,7 @@ export default function App() {
           incomeStreams={incomeStreams} setIncomeStreams={setIncomeStreams}
           cashFlows={cashFlows} setCashFlows={setCashFlows}
           spendingPhases={spendingPhases} setSpendingPhases={setSpendingPhases}
+          scheduledStress={scheduledStress} setScheduledStress={setScheduledStress}
           effectiveWeights={effectiveWeights}
           source={portfolio.source}
         />
@@ -298,6 +303,8 @@ interface DashboardProps {
   setCashFlows: (f: CashFlow[]) => void;
   spendingPhases: SpendingPhases | undefined;
   setSpendingPhases: (s: SpendingPhases | undefined) => void;
+  scheduledStress: ScheduledStress[];
+  setScheduledStress: (s: ScheduledStress[]) => void;
   effectiveWeights: Record<AssetClass, number> | null;
   source: "csv" | "manual";
 }
@@ -358,12 +365,13 @@ function Dashboard(p: DashboardProps) {
             <SurvivabilityCard result={p.simResult} computing={p.computing} horizon={p.horizon} strategy={p.strategy} />
             <AllocationChart allocation={p.allocation} />
           </div>
-          <FanChart result={p.simResult} horizon={p.horizon} />
+          <FanChart result={p.simResult} horizon={p.horizon} scheduledStress={p.scheduledStress} />
           <SwrSolverPanel baseInputs={p.baseInputs} weights={p.effectiveWeights} currentWithdrawal={p.withdrawal} />
-          <SequenceRiskPanel result={p.simResult} />
+          <SequenceRiskPanel result={p.simResult} scheduledStress={p.scheduledStress} />
           <CashFlowTable result={p.simResult} />
           <IncomePanel streams={p.incomeStreams} setStreams={p.setIncomeStreams} horizonYears={p.horizon} />
           <LumpSumsPanel flows={p.cashFlows} setFlows={p.setCashFlows} horizonYears={p.horizon} />
+          <ScheduledStressPanel events={p.scheduledStress} setEvents={p.setScheduledStress} horizonYears={p.horizon} />
           {!isManual && entryPanel}
           <TaxView allocation={p.allocation} retirementTaxRate={p.retirementTaxRate} />
           <OptimizerPanel
