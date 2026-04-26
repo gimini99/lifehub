@@ -63,6 +63,28 @@ const SCENARIOS: Scenario[] = [
     },
     recoveryYearsBaseline: 1,
   },
+  {
+    name: "Dalio: Changing World Order / Debasement",
+    description: "Cumulative ~10-yr impact of late-stage big-debt-cycle dynamics per Ray Dalio's framework: USD reserve status erodes, sustained currency debasement, real losses on bonds and cash even as nominal balances hold, US equity multiples compress. Gold and hard assets the principal hedges; emerging markets (especially the new-pole bloc) outperform on a relative basis. Recovery is a regime shift, not a bounce.",
+    shock: {
+      USStock: -0.25, IntlDeveloped: -0.20, IntlEmerging: 0.15,
+      Sector: -0.10, HighYieldBond: -0.30,
+      Bond: -0.30, ShortBond: -0.10, Cash: -0.25,
+      Gold: 1.20, Other: -0.10,
+    },
+    recoveryYearsBaseline: 10,
+  },
+  {
+    name: "Trump MAGA Boom",
+    description: "2-4yr cumulative scenario: tariff-led reshoring, extension/expansion of tax cuts, deregulation, fiscal expansion. US equities (especially small caps and domestic-focused) surge. International developed and emerging drag from tariff retaliation. Long-duration bonds suffer from rising yields and deficit pressure; short bonds benefit from elevated rates. Gold modestly higher on inflation/fiscal-deficit worry.",
+    shock: {
+      USStock: 0.40, IntlDeveloped: -0.05, IntlEmerging: -0.25,
+      Sector: 0.25, HighYieldBond: 0.15,
+      Bond: -0.15, ShortBond: 0.05, Cash: 0.05,
+      Gold: 0.20, Other: 0.20,
+    },
+    recoveryYearsBaseline: 0, // positive return scenario; "recovery" doesn't apply
+  },
 ];
 
 export function runStressScenarios(
