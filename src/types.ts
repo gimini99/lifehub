@@ -187,3 +187,40 @@ export interface StressResult {
   endingBalance: number;
   recoveryYearsEstimate: number;
 }
+
+/**
+ * Canonical serializable plan state. Captures every input that matters for reproducing
+ * the dashboard. Excludes ephemera (preview overrides, sim results, dashboard panels'
+ * local UI state) and large derived data.
+ *
+ * `holdings` is included so loading a plan reconstructs the full session even without
+ * re-uploading the original CSV. `source` lets the loader put the user back in the
+ * right starting screen path.
+ */
+export interface Plan {
+  /** Bumped on breaking changes; planIO migrates older versions on load. */
+  version: 1;
+  source: "csv" | "manual";
+  fileName: string;
+  holdings: Holding[];
+  extras: ExtraAsset[];
+  incomeStreams: IncomeStream[];
+  cashFlows: CashFlow[];
+  scheduledStress: ScheduledStress[];
+  spendingPhases?: SpendingPhases;
+  withdrawal: number;
+  horizon: number;
+  inflation: number;
+  paths: number;
+  strategy: WithdrawalStrategy;
+  simulationModel: SimulationModel;
+  retirementTaxRate: number;
+}
+
+/** Envelope stored in localStorage and exported as JSON. */
+export interface SavedPlan {
+  id: string;
+  name: string;
+  savedAt: string; // ISO timestamp
+  plan: Plan;
+}

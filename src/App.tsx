@@ -16,10 +16,11 @@ import { SequenceRiskPanel } from "./components/SequenceRiskPanel";
 import { SwrSolverPanel } from "./components/SwrSolverPanel";
 import { CashFlowTable } from "./components/CashFlowTable";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { PlansMenu } from "./components/PlansMenu";
 import { ThemeContext, useTheme } from "./lib/useTheme";
 import { parseFidelityCsv, computeAllocation, classWeights } from "./lib/parseCsv";
 import { runStressScenarios } from "./lib/stress";
-import type { AssetClass, CashFlow, ExtraAsset, Holding, IncomeStream, ScheduledStress, SimInputs, SimResult, SimulationModel, SpendingPhases, WithdrawalStrategy } from "./types";
+import type { AssetClass, CashFlow, ExtraAsset, Holding, IncomeStream, Plan, ScheduledStress, SimInputs, SimResult, SimulationModel, SpendingPhases, WithdrawalStrategy } from "./types";
 import { fmtUSD } from "./lib/format";
 
 interface PortfolioState {
@@ -150,6 +151,55 @@ export default function App() {
     setExtras([]);
   };
 
+  /** Snapshot every input that matters for reproducing the dashboard. */
+  const getPlan = (): Plan | null => {
+    if (!portfolio) return null;
+    return {
+      version: 1,
+      source: portfolio.source,
+      fileName: portfolio.fileName,
+      holdings: portfolio.holdings,
+      extras,
+      incomeStreams,
+      cashFlows,
+      scheduledStress,
+      spendingPhases,
+      withdrawal,
+      horizon,
+      inflation,
+      paths,
+      strategy,
+      simulationModel,
+      retirementTaxRate,
+    };
+  };
+
+  /** Apply a plan: replaces every input. Reset preview/sim caches so nothing is stale. */
+  const applyPlan = (plan: Plan) => {
+    setPortfolio({
+      holdings: plan.holdings,
+      fileName: plan.fileName,
+      loadedAt: new Date(),
+      source: plan.source,
+    });
+    setExtras(plan.extras);
+    setIncomeStreams(plan.incomeStreams);
+    setCashFlows(plan.cashFlows);
+    setScheduledStress(plan.scheduledStress);
+    setSpendingPhases(plan.spendingPhases);
+    setWithdrawal(plan.withdrawal);
+    setHorizon(plan.horizon);
+    setInflation(plan.inflation);
+    setPaths(plan.paths);
+    setStrategy(plan.strategy);
+    setSimulationModel(plan.simulationModel);
+    setRetirementTaxRate(plan.retirementTaxRate);
+    setPreviewWeights(null);
+    setPreviewLabel(null);
+    setSimResult(null);
+    setBaselineSuccess(null);
+  };
+
   const onPreview = (w: Record<AssetClass, number> | null, label: string | null) => {
     setPreviewWeights(w);
     setPreviewLabel(label);
@@ -187,6 +237,7 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <PlansMenu getPlan={getPlan} onLoad={applyPlan} />
           <ThemeToggle theme={theme} setTheme={setTheme} />
           {portfolio && (
             <button
