@@ -19,23 +19,50 @@ export function OptimizerPanel(props: Props) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [running, setRunning] = useState(false);
   const [selected, setSelected] = useState<Candidate | null>(null);
+  const [workerError, setWorkerError] = useState<string | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const reqIdRef = useRef(0);
+  const watchdogRef = useRef<number | null>(null);
 
   useEffect(() => {
     const w = new Worker(new URL("../workers/opt.worker.ts", import.meta.url), { type: "module" });
     workerRef.current = w;
     w.onmessage = (e: MessageEvent<{ id: number; results?: OptResult[]; progress?: { done: number; total: number }; error?: string }>) => {
       if (e.data.id !== reqIdRef.current) return;
-      if (e.data.progress) { setProgress(e.data.progress); return; }
-      if (e.data.error) { console.error(e.data.error); setRunning(false); return; }
+      if (e.data.progress) {
+        setProgress(e.data.progress);
+        // Got a heartbeat — clear the watchdog.
+        if (watchdogRef.current) { window.clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+        return;
+      }
+      if (e.data.error) {
+        console.error("[optimizer worker]", e.data.error);
+        setWorkerError(e.data.error);
+        setRunning(false);
+        return;
+      }
       if (e.data.results) {
         setResults(e.data.results);
         setRunning(false);
         setProgress(null);
+        if (watchdogRef.current) { window.clearTimeout(watchdogRef.current); watchdogRef.current = null; }
       }
     };
-    return () => w.terminate();
+    w.onerror = (event) => {
+      const msg = event.message || "Worker failed to load (often a stale service-worker cache — try a hard refresh: Ctrl+Shift+R / Cmd+Shift+R).";
+      console.error("[optimizer worker error]", event);
+      setWorkerError(msg);
+      setRunning(false);
+    };
+    w.onmessageerror = (event) => {
+      console.error("[optimizer message error]", event);
+      setWorkerError("Worker message could not be deserialized.");
+      setRunning(false);
+    };
+    return () => {
+      if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
+      w.terminate();
+    };
   }, []);
 
   // Re-run invalidates results (since assumptions changed underneath them).
@@ -46,6 +73,7 @@ export function OptimizerPanel(props: Props) {
 
   const run = () => {
     if (!workerRef.current) return;
+    setWorkerError(null);
     setRunning(true);
     setResults(null);
     setSelected(null);
@@ -60,6 +88,15 @@ export function OptimizerPanel(props: Props) {
       perturbCount: 20,
       seed: 7,
     });
+    // Watchdog: if we don't hear from the worker within 8s, assume it's stuck and surface a helpful message.
+    if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
+    watchdogRef.current = window.setTimeout(() => {
+      setWorkerError(
+        "Optimizer worker isn't responding. This is almost always a stale service-worker cache. " +
+        "Hard-refresh (Ctrl+Shift+R / Cmd+Shift+R) or close the tab and reopen.",
+      );
+      setRunning(false);
+    }, 8000);
   };
 
   const top = useMemo(() => results?.slice(0, 12) ?? [], [results]);
@@ -82,7 +119,13 @@ export function OptimizerPanel(props: Props) {
         </button>
       </div>
 
-      {!results && !running && (
+      {workerError && (
+        <div className="mb-3 rounded-md border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          {workerError}
+        </div>
+      )}
+
+      {!results && !running && !workerError && (
         <p className="text-sm text-slate-500 italic">Click the button to evaluate alternatives against your current plan.</p>
       )}
 
